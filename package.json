@@ -1,0 +1,31 @@
+{
+  "name": "roomie",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:api": "tsx --env-file=.env.local scripts/dev-server.ts",
+    "db:pull": "node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs pull && tsx scripts/sync-schema.ts",
+    "db:seed": "tsx --env-file=.env.local scripts/seed.ts",
+    "test": "vitest run",
+    "test:security": "tsx --env-file=.env.local scripts/security-tests.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.45.3",
+    "jose": "^6.2.12",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "drizzle-kit": "^0.31.11",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}

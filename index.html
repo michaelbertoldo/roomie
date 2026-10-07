@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roomie Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="phonebar" style="background:#6366f1;color:#fff;text-align:center;padding:8px 12px;font:600 14px system-ui,sans-serif"><a href="phone.html" style="color:#fff;text-decoration:underline">📱 View in iPhone simulator</a></div>
+<script>if(window.self!==window.top)document.getElementById('phonebar').remove()</script>
+<div id="root"></div>
+<button id="devbtn" onclick="A.modal('dev')" aria-label="Prototype tools" title="Prototype tools">🧪</button>
+<div id="toast" aria-live="polite"></div>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script src="app2.js"></script>
+<script>boot()</script>
+</body>
+</html>

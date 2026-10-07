@@ -1,0 +1,28 @@
+id,priority,feature,requirement,contributor
+M-01,Must,Shared expense tracker,"Records communal purchases, calculates each roommate's portion, and links to external payment services (Venmo, Zelle, Apple Cash) for repayment. Always shows the list of past purchases and a confirmation when a roommate pays back.",Ashlynne Hawkins
+M-02,Must,Shared wishlist,"Always shows a wishlist of future shared purchases. ""Add item"" opens a pop-up for price, optional link, and optional description of why it's needed. Clicking an item shows details; only its creator can edit or delete it.",Ashlynne Hawkins
+M-03,Must,Chore chart,"List of chores that starts empty. ""Add task"" takes a name, description, and either a date and time (one-time) or a day of the week and time (recurring), with a calendar picker. Creator picks the responsible roommate, or the system rotates the chore through roommates in turn. Sort and filter by date added, alphabetical, or assignee.",Ashlynne Hawkins
+M-04,Must,Chore completion,"Each chore shows whether it is done and the date it was marked complete. Chores can be marked done when completed or once the date passes. Upcoming chores appear on each user's home page and link to the chore's details.",Ashlynne Hawkins
+M-05,Must,Chore swap and skip requests,"On a chore assigned to them, a user can pick another roommate, choose one of that roommate's chores, write a reason, and submit a swap request (or request a skip). The recipient sees the proposal and message, accepts or declines, and can reply; the response notifies the requester.","Ashlynne Hawkins, Frankie Cappello"
+M-06,Must,Shared calendar,"Always visible, with a list view and a calendar view. ""Add event"" takes a name, date, reminder, tagged roommates, location, and color. Clicking an event shows all details; only the creator can edit. Events can be sorted by color. Chores appear on the calendar showing the task name and who is assigned that occurrence.",Ashlynne Hawkins
+M-07,Must,Communication board,"Sticky-note board next to the calendar, used to share plans and check with roommates before hosting guests. Clicking the board enlarges it. A note can tag a calendar event and links to it. Roommates can reply to notes, and the board and calendar update in real time.",Ashlynne Hawkins
+M-08,Must,Notification dashboard,"Notifications from other roommates' actions land in one of five sections: (1) chore swap requests and chore updates, (2) money requests and payments, (3) new items added to the expense tracker, (4) system updates, (5) calendar updates and new board comments. Every notification has a ""Check it out"" button that opens the related part of the app. Swap requests show a red alert in the top bar.",Ashlynne Hawkins
+M-09,Must,Home page,"One-glance snapshot of this week's calendar, the latest notifications, and recent board comments; clicking any of them opens the full feature. An AI reads the snapshot at sign-in and gives a 1-2 sentence update or recommended action.","Michael Bertoldo, Ashlynne Hawkins"
+M-10,Must,Navigation bar,"A top bar is always shown with Home, Settings, and links to each section, leaving out the page the user is currently on.",Michael Bertoldo
+S-01,Should,Roommate profiles,"Each profile shows a photo, contact information and social media, allergies, preferred payment platform, and other important information.",Ashlynne Hawkins
+S-02,Should,Schedules on the calendar,"Roommates can see each other's work and school schedules on the shared calendar, along with upcoming plans that affect the apartment.",Ashlynne Hawkins
+S-03,Should,Custom tasks,"Users can create custom tasks beyond the preset chore and finance types.",Heidi Barlow
+S-04,Should,Task reminders,"Users can send reminders about tasks that haven't been done.",Heidi Barlow
+S-05,Should,Shopping list,"Roommates post food and cleaning supplies that need restocking, and the system shows whose turn it is to buy.",Frankie Cappello
+S-06,Should,Phone notifications,"Roommates can receive the app's notifications about chores, payments, and other updates on their phones.",Ashlynne Hawkins
+C-01,Could,Sort by neglected tasks,"Tasks can be sorted to show what hasn't been done in a while.",Heidi Barlow
+C-02,Could,Calendar import and export,"Import calendars from and export calendars to other services.",Heidi Barlow
+C-03,Could,Light and dark mode,"The site offers both a light mode and a dark mode.",Heidi Barlow
+C-04,Could,Custom colors,"Colors can be customized per account.",Heidi Barlow
+C-05,Could,Deeper integrations,"Sync shared calendars with outside calendars and pay roommates back directly inside the app.",Ashlynne Hawkins
+C-06,Could,Messaging platform connection,"Connect to messaging platforms so messages can be sent over data.",Heidi Barlow
+C-07,Could,Apartment-complex edition,"A version for whole apartment complexes: complex-wide announcements dashboard and shared calendar, Reels (approved short-form videos of complex events to attract tenants), easy lease renewal, and easy help requests.",Michael Bertoldo
+W-01,Won't,Group texting thread,"No shared texting thread; the app is not meant to be a texting or communication platform.",Ashlynne Hawkins
+W-02,Won't,Location sharing,"No roommate location sharing or tracking (Life360-style).",Frankie Cappello
+W-03,Won't,Sub-groups,"No sub-groups within a household, since they would encourage cliques between roommates.",Frankie Cappello
+W-04,Won't,Chat between households,"No chat between different roommate groups.",Heidi Barlow

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roomie iPhone Preview</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:#0f1320;color:#eef0f6;font-family:ui-rounded,system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 12px 32px}
+.bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center}
+a.back,select,button{background:#1d2338;color:#eef0f6;border:1px solid #2a3148;border-radius:10px;padding:8px 14px;font:inherit;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer}
+a.back:hover,button:hover{border-color:#6366f1}
+.phone{position:relative;width:418px;height:872px;border-radius:64px;background:#0b0d14;padding:14px;box-shadow:0 0 0 2px #2a3148,0 0 0 8px #151a2b,0 30px 80px rgba(0,0,0,.6);flex:none}
+.screen{position:relative;width:390px;height:844px;border-radius:50px;overflow:hidden;background:#fff}
+.status{position:absolute;top:0;left:0;right:0;height:50px;display:flex;justify-content:space-between;align-items:center;padding:6px 32px 0;font-size:15px;font-weight:700;color:#000;background:#fff;z-index:2}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:120px;height:34px;border-radius:20px;background:#000;z-index:3}
+iframe{position:absolute;top:50px;left:0;width:390px;height:794px;border:0;background:#fff}
+.home{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:140px;height:5px;border-radius:3px;background:#000;z-index:3;opacity:.85}
+.dark .status{background:#0e121e;color:#fff}.dark iframe{background:#0e121e}
+@media(max-height:900px){.phone{transform:scale(.82);transform-origin:top center;margin-bottom:-155px}}
+</style>
+</head>
+<body>
+<div class="bar">
+  <a class="back" href="index.html">← Full-size app</a>
+  <select id="jump" aria-label="Jump to screen">
+    <option value="signin">1 Sign in</option><option value="welcome">2 Welcome</option><option value="profile-setup">3 Profile setup</option>
+    <option value="choose">4 Create or join</option><option value="new-house">5 New household</option><option value="invite">6 Invite</option><option value="join">7 Join</option>
+    <option value="home" selected>8 Home</option><option value="notifications">9 Notifications</option><option value="profile">10 My profile</option>
+    <option value="calendar">11 Calendar</option><option value="finances">13 Finances</option><option value="ledger/u2">14 Ledger</option>
+    <option value="chores">20 Chores</option><option value="chore/c2">22 Chore details</option><option value="settings">23 Settings</option><option value="members">24 Members</option>
+  </select>
+  <button id="dm">Toggle dark mode</button>
+</div>
+<div class="phone"><div class="screen" id="scr">
+  <div class="status"><span>9:41</span><span>●●●● ▮</span></div><div class="island"></div>
+  <iframe id="f" src="index.html#/home" title="Roomie app"></iframe>
+  <div class="home"></div>
+</div></div>
+<script>
+const f=document.getElementById('f'),j=document.getElementById('jump');
+j.onchange=()=>{f.contentWindow.location.hash='#/'+j.value};
+const sync=()=>{try{document.getElementById('scr').classList.toggle('dark',f.contentDocument.documentElement.classList.contains('dark'))}catch(e){}};f.addEventListener('load',sync);setInterval(sync,400);
+document.getElementById('dm').onclick=()=>{try{const w=f.contentWindow;w.eval('A.theme(!UI.dark)');sync()}catch(e){}};
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+.vercel
+
+.env
+.env.local
+node_modules
+dist
+.backup-pre-haven
+.DS_Store
+**/.DS_Store
