@@ -550,6 +550,93 @@ async function main() {
   check('is_completed always matches completed_at', (await sql(`SELECT 1 FROM chore_assignment a JOIN chore c USING (chore_id) WHERE c.household_id=$1 AND a.is_completed <> (a.completed_at IS NOT NULL)`, [h3])).length === 0);
   check('every swap request is either pending with no response date, or decided with one', (await sql(`SELECT 1 FROM chore_swap_request r JOIN chore_assignment a ON a.assignment_id=r.requester_assignment_id JOIN chore c USING (chore_id) WHERE c.household_id=$1 AND ((r.status='pending') <> (r.responded_date IS NULL))`, [h3])).length === 0);
   check('no two open requests ever touch the same occurrence', (await sql(`WITH o AS (SELECT requester_assignment_id a FROM chore_swap_request WHERE status='pending' UNION ALL SELECT target_assignment_id FROM chore_swap_request WHERE status='pending' AND target_assignment_id IS NOT NULL) SELECT a FROM o GROUP BY a HAVING count(*) > 1`)).length === 0);
+  console.log('\n[10] calendar and board: events, tags, the hosting check, notes');
+  const H4 = await read(await api('/api/households', { method: 'POST', token: A.token, body: { householdName: 'Calendar House', timezone: 'America/Denver' } }));
+  const h4 = H4.householdId as number;
+  for (const t of [B.token, D.token]) await api('/api/households/join', { method: 'POST', token: t, body: { joinCode: H4.joinCode } });
+  const p4 = (path: string) => `/api/households/${h4}${path}`;
+  const send4 = (method: string, path: string, token: string, body?: unknown) => api(p4(path), { method, token, body });
+  const notes4 = (q: string, params: unknown[] = []) => count(`SELECT count(*) n FROM notification WHERE household_id=${h4} AND ${q}`, params);
+  const goodEv = { eventName: 'Game night', date: addD(today, 3), time: '19:00', endTime: '23:00', category: 'hosting', color: '#7c3aed', reminderMinutesBefore: 60, taggedUserIds: [uB] };
+
+  console.log(' [10a] outsiders and bad input');
+  for (const [m, path] of [['GET', '/events'], ['POST', '/events'], ['GET', '/board'], ['POST', '/board']] as const)
+    await expectStatus(`outsider C: ${m} ${path} -> 404`, send4(m, path, C.token, m === 'POST' ? (path === '/events' ? goodEv : { messageText: 'hi' }) : undefined), 404);
+  const evCount = () => count('SELECT count(*) n FROM event WHERE household_id=$1', [h4]);
+  const before10 = { e: await evCount(), n: await notes4('true') };
+  for (const [name, b] of [
+    ['no name', { ...goodEv, eventName: ' ' }], ['bad date', { ...goodEv, date: '2026-02-31' }], ['bad time', { ...goodEv, time: '7pm' }], ['bad category', { ...goodEv, category: 'party' }],
+    ['bad color', { ...goodEv, color: 'purple' }], ['negative reminder', { ...goodEv, reminderMinutesBefore: -5 }], ['ends before it starts', { ...goodEv, endTime: '18:00' }],
+    ['tagging an outsider', { ...goodEv, taggedUserIds: [uC] }], ['tag list that is not a list', { ...goodEv, taggedUserIds: 'everyone' }], ['name too long', { ...goodEv, eventName: 'x'.repeat(121) }],
+  ] as [string, Record<string, unknown>][]) await expectStatus(`${name} -> 400`, send4('POST', '/events', A.token, b), 400);
+  check('none of those created an event or a notification', (await evCount()) === before10.e && (await notes4('true')) === before10.n);
+
+  console.log(' [10b] creating an event, tags and the hosting check');
+  const ev = await read(await expectStatus('A creates a hosting event, tagging B (body also claims C made it)', send4('POST', '/events', A.token, { ...goodEv, createdByUserId: uC, created_by_user_id: uC }), 201));
+  const evId = ev.eventId as number;
+  check('the creator is the token user, not the id in the body', Number((await sql('SELECT created_by_user_id FROM event WHERE event_id=$1', [evId]))[0].created_by_user_id) === uA);
+  check('start and end are in the household timezone (7 PM and 11 PM Denver)', (await sql(`SELECT to_char(event_date AT TIME ZONE 'America/Denver','HH24:MI') s, to_char(end_date AT TIME ZONE 'America/Denver','HH24:MI') e FROM event WHERE event_id=$1`, [evId]))[0].s === '19:00');
+  const tagB = (await sql('SELECT response FROM event_tag WHERE event_id=$1 AND user_id=$2', [evId, uB]))[0];
+  check('B is tagged and the hosting check is pending', tagB?.response === 'pending' && ev.tags.length === 1);
+  check('B was asked (calendar_board section, points at the event); A was not notified', (await notes4(`user_id=$1 AND section='calendar_board' AND source_type='event' AND source_id=$2 AND message LIKE '%Is that okay%'`, [uB, evId])) === 1 && (await notes4('user_id=$1', [uA])) === 0);
+  const plain = await read(await expectStatus('A creates a non-hosting event tagging B', send4('POST', '/events', A.token, { eventName: 'Landlord visit', date: addD(today, 5), time: '10:00', category: 'other', taggedUserIds: [uB, uA] }), 201));
+  check('a non-hosting tag asks no question (response stays empty) and the creator never tags themselves', (await sql('SELECT response, user_id FROM event_tag WHERE event_id=$1', [plain.eventId])).length === 1 && (await sql('SELECT response FROM event_tag WHERE event_id=$1', [plain.eventId]))[0].response === null);
+  const evList = await read(await expectStatus('B lists events', send4('GET', '/events', B.token), 200));
+  const asB = evList.events.find((e: any) => e.eventId === evId), asA = (await read(await send4('GET', '/events', A.token))).events.find((e: any) => e.eventId === evId); // eslint-disable-line @typescript-eslint/no-explicit-any
+  check('canEdit is true only for the creator', asA.canEdit === true && asB.canEdit === false);
+
+  console.log(' [10c] only the creator edits; only the person asked answers');
+  await expectStatus('B cannot edit A\'s event (403)', send4('PATCH', `/events/${evId}`, B.token, { ...goodEv, eventName: 'Hijacked' }), 403);
+  await expectStatus('B cannot delete A\'s event (403)', send4('DELETE', `/events/${evId}`, B.token), 403);
+  await expectStatus('outsider C cannot touch it (404)', send4('PATCH', `/events/${evId}`, C.token, goodEv), 404);
+  await expectStatus('the same event through another household\'s path is 404', api(`/api/households/${hid}/events/${evId}/respond`, { method: 'POST', token: A.token, body: { response: 'accepted' } }), 404);
+  check('nothing changed', (await sql('SELECT event_name FROM event WHERE event_id=$1', [evId]))[0].event_name === 'Game night');
+  await expectStatus('A (the creator, not asked) cannot answer (400)', send4('POST', `/events/${evId}/respond`, A.token, { response: 'accepted' }), 400);
+  await expectStatus('D (not tagged) cannot answer (400)', send4('POST', `/events/${evId}/respond`, D.token, { response: 'accepted' }), 400);
+  await expectStatus('B answering "maybe" -> 400', send4('POST', `/events/${evId}/respond`, B.token, { response: 'maybe' }), 400);
+  await expectStatus('B cannot answer a non-hosting tag (400)', send4('POST', `/events/${plain.eventId}/respond`, B.token, { response: 'accepted' }), 400);
+  await expectStatus('B accepts (body tries to answer as D)', send4('POST', `/events/${evId}/respond`, B.token, { response: 'accepted', userId: uD, user_id: uD }), 200);
+  check('B\'s tag says accepted with a date; nobody else got a tag out of it', (await sql('SELECT user_id, response, responded_date FROM event_tag WHERE event_id=$1', [evId])).every((r) => Number(r.user_id) === uB && r.response === 'accepted' && r.responded_date));
+  check('A was told B is fine with it', (await notes4(`user_id=$1 AND source_type='event' AND source_id=$2 AND message LIKE '%fine with%'`, [uA, evId])) === 1);
+  await expectStatus('A edits the event and adds D', send4('PATCH', `/events/${evId}`, A.token, { ...goodEv, eventName: 'Game night (updated)', taggedUserIds: [uB, uD] }), 200);
+  check('only D is newly asked; B keeps the answer already given', (await notes4(`user_id=$1 AND source_id=$2 AND message LIKE '%Is that okay%'`, [uD, evId])) === 1 && (await notes4(`user_id=$1 AND source_id=$2 AND message LIKE '%Is that okay%'`, [uB, evId])) === 1 && (await sql(`SELECT response FROM event_tag WHERE event_id=$1 AND user_id=$2`, [evId, uB]))[0].response === 'accepted');
+  await expectStatus('A edits and removes B from the tags', send4('PATCH', `/events/${evId}`, A.token, { ...goodEv, taggedUserIds: [uD] }), 200);
+  check('B is no longer tagged', (await sql('SELECT 1 FROM event_tag WHERE event_id=$1 AND user_id=$2', [evId, uB])).length === 0);
+
+  console.log(' [10d] the board');
+  const note = await read(await expectStatus('A posts a note linked to the event', send4('POST', '/board', A.token, { messageText: 'Anyone mind game night?', eventId: evId, senderUserId: uC }), 201));
+  check('the sender is the token user, not the id in the body', Number((await sql('SELECT sender_user_id FROM bulletin_message WHERE message_id=$1', [note.messageId]))[0].sender_user_id) === uA && note.eventId === evId);
+  for (const [name, b] of [['empty note', { messageText: '  ' }], ['501 characters', { messageText: 'x'.repeat(501) }], ['an event that does not exist', { messageText: 'hi', eventId: 999999999 }], ['an event from another household', { messageText: 'hi', eventId: (await sql('SELECT event_id FROM event WHERE household_id=$1 LIMIT 1', [hid]))[0]?.event_id ?? 1 }], ['a parent that does not exist', { messageText: 'hi', parentMessageId: 999999999 }]] as [string, Record<string, unknown>][]) {
+    const r = await send4('POST', '/board', B.token, b); check(`${name} -> 400 or 404`, r.status === 400 || r.status === 404, `(${r.status})`);
+  }
+  const reply = await read(await expectStatus('B replies to A\'s note', send4('POST', '/board', B.token, { messageText: 'Fine by me!', parentMessageId: note.messageId }), 201));
+  check('A was told about the reply (and B was not told about their own)', (await notes4(`user_id=$1 AND source_type='bulletin_message' AND source_id=$2`, [uA, reply.messageId])) === 1 && (await notes4('user_id=$1 AND source_type=\'bulletin_message\'', [uB])) === 0);
+  await expectStatus('a reply to a reply -> 400', send4('POST', '/board', A.token, { messageText: 'nested', parentMessageId: reply.messageId }), 400);
+  await expectStatus('a reply cannot be linked to an event (400)', send4('POST', '/board', A.token, { messageText: 'x', parentMessageId: note.messageId, eventId: evId }), 400);
+  const board = await read(await expectStatus('B reads the board', send4('GET', '/board', B.token), 200));
+  const shown = board.notes.find((n: any) => n.messageId === note.messageId); // eslint-disable-line @typescript-eslint/no-explicit-any
+  check('replies nest under their note; canEdit is per viewer', shown.replies.length === 1 && shown.canEdit === false && shown.replies[0].canEdit === true);
+  await expectStatus('B cannot edit A\'s note (403)', send4('PATCH', `/board/${note.messageId}`, B.token, { messageText: 'changed' }), 403);
+  await expectStatus('B cannot pin A\'s note (403)', send4('PATCH', `/board/${note.messageId}`, B.token, { isPinned: true }), 403);
+  await expectStatus('B cannot delete A\'s note (403)', send4('DELETE', `/board/${note.messageId}`, B.token), 403);
+  await expectStatus('outsider C cannot read or change notes (404)', send4('PATCH', `/board/${note.messageId}`, C.token, { isPinned: true }), 404);
+  await expectStatus('a note through another household\'s path is 404', api(`/api/households/${hid}/board/${note.messageId}`, { method: 'PATCH', token: A.token, body: { isPinned: true } }), 404);
+  await expectStatus('A pins their note', send4('PATCH', `/board/${note.messageId}`, A.token, { isPinned: true }), 200);
+  await expectStatus('a reply cannot be pinned (400)', send4('PATCH', `/board/${reply.messageId}`, B.token, { isPinned: true }), 400);
+  await expectStatus('isPinned must be a boolean (400)', send4('PATCH', `/board/${note.messageId}`, A.token, { isPinned: 'yes' }), 400);
+  check('the pinned note comes first', (await read(await send4('GET', '/board', A.token))).notes[0].messageId === note.messageId);
+  await expectStatus('A deletes the note', send4('DELETE', `/board/${note.messageId}`, A.token), 200);
+  check('its reply and the notification about it went with it', (await sql('SELECT 1 FROM bulletin_message WHERE message_id IN ($1,$2)', [note.messageId, reply.messageId])).length === 0 && (await notes4(`source_type='bulletin_message'`)) === 0);
+
+  console.log(' [10e] deleting an event, and roommates who moved out');
+  await expectStatus('A deletes the event', send4('DELETE', `/events/${evId}`, A.token), 200);
+  check('its tags and notifications are gone', (await sql('SELECT 1 FROM event_tag WHERE event_id=$1', [evId])).length === 0 && (await notes4(`source_type='event' AND source_id=$1`, [evId])) === 0);
+  await sql('UPDATE household_member SET left_date = now() WHERE household_id=$1 AND user_id=$2', [h4, uD]);
+  await expectStatus('D (moved out) can no longer read events (404)', send4('GET', '/events', D.token), 404);
+  await expectStatus('D (moved out) can no longer read or post on the board (404)', send4('POST', '/board', D.token, { messageText: 'hello?' }), 404);
+  await expectStatus('a new event cannot tag someone who moved out (400)', send4('POST', '/events', A.token, { ...goodEv, taggedUserIds: [uD] }), 400);
+  check('every tag belongs to a roommate who was a member', (await sql(`SELECT 1 FROM event_tag t JOIN event e USING (event_id) WHERE e.household_id=$1 AND NOT EXISTS (SELECT 1 FROM household_member m WHERE m.household_id=e.household_id AND m.user_id=t.user_id)`, [h4])).length === 0);
+
 }
 
 let exitCode = 0;

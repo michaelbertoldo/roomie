@@ -23,6 +23,11 @@ import * as payments from './handlers/payments.js';
 import * as paymentReview from './handlers/payment-review.js';
 import * as wishlist from './handlers/wishlist.js';
 import * as wishlistOne from './handlers/wishlist-one.js';
+import * as events from './handlers/events.js';
+import * as eventOne from './handlers/event-one.js';
+import * as eventRespond from './handlers/event-respond.js';
+import * as board from './handlers/board.js';
+import * as boardOne from './handlers/board-one.js';
 
 type Handler = (req: Request) => Promise<Response>;
 type Entry = { method: string; parts: string[]; handler: Handler };
@@ -53,6 +58,11 @@ add('/households/:id/payments', payments);
 add('/households/:id/payments/:paymentId', paymentReview);
 add('/households/:id/wishlist', wishlist);
 add('/households/:id/wishlist/:itemId', wishlistOne);
+add('/households/:id/events', events);
+add('/households/:id/events/:eventId', eventOne);
+add('/households/:id/events/:eventId/respond', eventRespond);
+add('/households/:id/board', board);
+add('/households/:id/board/:messageId', boardOne);
 add('/notifications', notifications);
 add('/notifications/:id', notificationRead);
 
