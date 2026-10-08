@@ -1,7 +1,7 @@
 import { and, eq, isNull } from 'drizzle-orm';
-import { db, schema } from './_lib/db.js';
-import { withUser } from './_lib/context.js';
-import { json } from './_lib/http.js';
+import { db, schema } from '../db.js';
+import { withUser } from '../context.js';
+import { json } from '../http.js';
 
 // First call after sign-in: requireUser creates the users row if this is a new person.
 export const GET = withUser(async (user) => {
@@ -11,7 +11,8 @@ export const GET = withUser(async (user) => {
   }).from(schema.users).where(eq(schema.users.userId, user.userId));
   const households = await db.select({
     householdId: schema.household.householdId, householdName: schema.household.householdName,
-    timezone: schema.household.timezone, themeColor: schema.household.themeColor, role: schema.householdMember.role,
+    timezone: schema.household.timezone, themeColor: schema.household.themeColor,
+    joinCode: schema.household.joinCode, address: schema.household.address, role: schema.householdMember.role,
   }).from(schema.householdMember)
     .innerJoin(schema.household, eq(schema.household.householdId, schema.householdMember.householdId))
     .where(and(eq(schema.householdMember.userId, user.userId), isNull(schema.householdMember.leftDate)));

@@ -10,9 +10,15 @@
     "dev:api": "tsx --env-file=.env.local scripts/dev-server.ts",
     "db:pull": "node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs pull && tsx scripts/sync-schema.ts",
     "db:seed": "tsx --env-file=.env.local scripts/seed.ts",
+    "db:unseed": "tsx --env-file=.env.local scripts/unseed.ts",
     "test": "vitest run",
     "test:security": "tsx --env-file=.env.local scripts/security-tests.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test:preview": "tsx --env-file=.env.local scripts/preview-test.ts",
+    "test:cleanup": "tsx --env-file=.env.local scripts/cleanup-tests.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",

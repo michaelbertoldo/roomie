@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fromCents, splitCents, sumCents, toCents } from '../api/_lib/money.js';
+import { fromCents, splitCents, sumCents, toCents } from '../shared/money.js';
 
 describe('toCents / fromCents', () => {
   it('parses exactly, with no float drift', () => {

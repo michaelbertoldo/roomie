@@ -4,10 +4,9 @@
 import { randomBytes } from 'node:crypto';
 import { generateKeyPair, SignJWT } from 'jose';
 import pg from 'pg';
-import { buildRoutes, handle } from './dev-server.js';
+import { handle } from './dev-server.js';
 import { countTestData, sweepTestData } from './lib/test-cleanup.js';
 
-const routes = buildRoutes();
 const ORIGIN = 'http://localhost:3001'; // allowed by Neon Auth (allow_localhost)
 const owner = new pg.Pool({ connectionString: process.env.DATABASE_URL_UNPOOLED, max: 2 });
 const run = randomBytes(3).toString('hex');
@@ -18,7 +17,7 @@ const api = (path: string, init: { method?: string; token?: string; body?: unkno
     method: init.method ?? 'GET',
     headers: { origin: ORIGIN, 'content-type': 'application/json', ...(init.token ? { authorization: `Bearer ${init.token}` } : {}), ...init.headers },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
-  }), routes);
+  }));
 const read = async (res: Response) => { const t = await res.text(); try { return JSON.parse(t); } catch { return t; } };
 
 function check(name: string, ok: boolean, detail = '') {

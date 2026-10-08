@@ -6,8 +6,7 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
-    "noEmit": true,
-    "types": ["node"]
+    "noEmit": true
   },
-  "include": ["api", "scripts", "tests", "drizzle.config.ts"]
+  "include": ["api", "shared", "scripts", "tests", "drizzle.config.ts"]
 }

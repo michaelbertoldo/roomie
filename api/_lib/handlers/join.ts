@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
-import { db, schema } from '../_lib/db.js';
-import { withUser } from '../_lib/context.js';
-import { HttpError, body, json } from '../_lib/http.js';
+import { db, schema } from '../db.js';
+import { withUser } from '../context.js';
+import { HttpError, body, json } from '../http.js';
 
 // Join by code. Rejoining a household you moved out of clears left_date on the old row (v3 rule).
 export const POST = withUser(async (user, req) => {

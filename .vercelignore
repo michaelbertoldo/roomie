@@ -1,0 +1,5 @@
+.env*
+node_modules
+dist
+.backup-pre-haven
+.DS_Store

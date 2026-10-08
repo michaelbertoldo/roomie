@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
-import { db, schema } from '../../_lib/db.js';
-import { withHousehold } from '../../_lib/context.js';
-import { json } from '../../_lib/http.js';
+import { db, schema } from '../db.js';
+import { withHousehold } from '../context.js';
+import { json } from '../http.js';
 
 // Current AND former roommates: people who moved out keep their history visible (v3 rule).
 export const GET = withHousehold(async ({ householdId }) => {

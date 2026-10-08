@@ -1,7 +1,7 @@
-import { db, schema } from '../_lib/db.js';
-import { withUser } from '../_lib/context.js';
-import { HttpError, body, json } from '../_lib/http.js';
-import { newJoinCode } from '../_lib/joincode.js';
+import { db, schema } from '../db.js';
+import { withUser } from '../context.js';
+import { HttpError, body, json } from '../http.js';
+import { newJoinCode } from '../joincode.js';
 
 const validZone = (tz: string) => { try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; } catch { return false; } };
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');

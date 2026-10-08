@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
-import { db, schema } from '../_lib/db.js';
-import { withUser } from '../_lib/context.js';
-import { HttpError, body, id, json, segments } from '../_lib/http.js';
+import { db, schema } from '../db.js';
+import { withUser } from '../context.js';
+import { HttpError, body, id, json, segments } from '../http.js';
 
 // Mark one of YOUR notifications read. Someone else's notification looks like it doesn't exist.
 export const PATCH = withUser(async (user, req) => {

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
-import { db, schema } from '../../_lib/db.js';
-import { withHousehold } from '../../_lib/context.js';
-import { json } from '../../_lib/http.js';
+import { db, schema } from '../db.js';
+import { withHousehold } from '../context.js';
+import { json } from '../http.js';
 
 // Read-only for now; the chore slice adds create/edit/complete/swap.
 export const GET = withHousehold(async ({ householdId }) => {

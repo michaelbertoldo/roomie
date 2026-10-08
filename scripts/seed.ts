@@ -1,16 +1,16 @@
 // Demo data: one household, 3 current roommates + 1 who moved out.
 //   npm run db:seed        (re-runnable: it first removes its own previous data)
 //
-// It only ever touches rows it owns: the household with join code MAPLE412 and users whose
-// email ends in @seed.roomie.test. Those users have no sign-in, so to look around, sign up
-// normally and join the household with the code MAPLE412.
-import { eq, like, sql } from 'drizzle-orm';
+// It only ever touches rows it owns: the household with join code MAPLE412 and the four users
+// listed in scripts/lib/seed-constants.ts. Those users have no sign-in, so to look around, sign
+// up normally and join the household with the code MAPLE412. `npm run db:unseed` removes it all.
+import { eq, inArray, sql } from 'drizzle-orm';
 import { db, pool, schema as s } from '../api/_lib/db.js';
 import { fromCents, splitCents, toCents } from '../api/_lib/money.js';
+import { SEED_EMAILS, SEED_EMAIL_LIST, SEED_JOIN_CODE } from './lib/seed-constants.js';
 
 const TZ = 'America/Denver';
-const JOIN_CODE = 'MAPLE412';
-const EMAIL_DOMAIN = '@seed.roomie.test';
+const JOIN_CODE = SEED_JOIN_CODE;
 
 // ---- date helpers (all calendar math in the household's timezone) ----------------------------
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: TZ }).format(new Date()); // YYYY-MM-DD
@@ -26,14 +26,14 @@ async function main() {
   await db.transaction(async (tx) => {
     // ---- wipe our own previous seed ----------------------------------------------------------
     await tx.delete(s.household).where(eq(s.household.joinCode, JOIN_CODE)); // cascades to everything in it
-    await tx.delete(s.users).where(like(s.users.email, `%${EMAIL_DOMAIN}`));
+    await tx.delete(s.users).where(inArray(s.users.email, SEED_EMAIL_LIST));
 
     // ---- people, household, membership -------------------------------------------------------
     const [alex, priya, jake, sam] = await tx.insert(s.users).values([
-      { firstName: 'Alex', lastName: 'Rivera', email: `alex${EMAIL_DOMAIN}`, phoneNumber: '(801) 555-0141' },
-      { firstName: 'Priya', lastName: 'Shah', email: `priya${EMAIL_DOMAIN}`, phoneNumber: '(801) 555-0188' },
-      { firstName: 'Jake', lastName: 'Moreno', email: `jake${EMAIL_DOMAIN}`, phoneNumber: '(801) 555-0102' },
-      { firstName: 'Sam', lastName: 'Okafor', email: `sam${EMAIL_DOMAIN}`, phoneNumber: '(801) 555-0177' },
+      { firstName: 'Alex', lastName: 'Rivera', email: SEED_EMAILS.alex, phoneNumber: '(801) 555-0141' },
+      { firstName: 'Priya', lastName: 'Shah', email: SEED_EMAILS.priya, phoneNumber: '(801) 555-0188' },
+      { firstName: 'Jake', lastName: 'Moreno', email: SEED_EMAILS.jake, phoneNumber: '(801) 555-0102' },
+      { firstName: 'Sam', lastName: 'Okafor', email: SEED_EMAILS.sam, phoneNumber: '(801) 555-0177' },
     ]).returning();
     const [A, P, J, S] = [alex!.userId, priya!.userId, jake!.userId, sam!.userId];
 
@@ -53,7 +53,7 @@ async function main() {
       { userId: A, app: 'venmo', username: '@alex-rivera', isPreferred: true },
       { userId: P, app: 'venmo', username: '@priya-shah', isPreferred: true },
       { userId: P, app: 'apple_cash', username: '(801) 555-0188', isPreferred: false },
-      { userId: J, app: 'zelle', username: 'jake.moreno@seed.roomie.test', isPreferred: true },
+      { userId: J, app: 'zelle', username: 'maple.jake@example.com', isPreferred: true },
     ]);
 
     // ---- chores: the rule + generated occurrences ---------------------------------------------

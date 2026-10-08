@@ -1,8 +1,10 @@
 {
+  "framework": "vite",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
-    {
-      "source": "/api/auth/:path*",
-      "destination": "https://ep-lingering-wave-b4harozg.neonauth.c-6.us-east-2.aws.neon.tech/neondb/auth/:path*"
-    }
+    { "source": "/api/auth/:path*", "destination": "/api/auth-proxy?p=:path*" },
+    { "source": "/api/:path*", "destination": "/api/router?p=:path*" }
   ]
 }
