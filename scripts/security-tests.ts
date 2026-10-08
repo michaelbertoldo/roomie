@@ -637,6 +637,61 @@ async function main() {
   await expectStatus('a new event cannot tag someone who moved out (400)', send4('POST', '/events', A.token, { ...goodEv, taggedUserIds: [uD] }), 400);
   check('every tag belongs to a roommate who was a member', (await sql(`SELECT 1 FROM event_tag t JOIN event e USING (event_id) WHERE e.household_id=$1 AND NOT EXISTS (SELECT 1 FROM household_member m WHERE m.household_id=e.household_id AND m.user_id=t.user_id)`, [h4])).length === 0);
 
+  console.log('\n[11] notification dashboard: own rows only, red alert, read-all, moved-out households');
+  const H5 = await read(await api('/api/households', { method: 'POST', token: A.token, body: { householdName: 'Notify House', timezone: 'America/Denver' } }));
+  const h5 = H5.householdId as number;
+  for (const t of [B.token, D.token]) await api('/api/households/join', { method: 'POST', token: t, body: { joinCode: H5.joinCode } });
+  const p5 = (path: string) => `/api/households/${h5}${path}`;
+  const inbox = async (token: string) => read(await api('/api/notifications', { token })) as Promise<{ notifications: any[]; unread: number; swapPending: number }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const mkChore = async (token: string, userId: number, name: string, days: number) => (await read(await api(p5('/chores'), { method: 'POST', token, body: { choreName: name, repeats: 'none', date: addD(today, days), dueTime: '18:00', assignment: { mode: 'person', userId } } }))).choreId as number;
+  const aChore = await mkChore(A.token, uA, 'A chore', 2), bChore = await mkChore(A.token, uB, 'B chore', 3);
+  const aAsg = Number((await sql('SELECT assignment_id FROM chore_assignment WHERE chore_id=$1', [aChore]))[0].assignment_id), bAsg = Number((await sql('SELECT assignment_id FROM chore_assignment WHERE chore_id=$1', [bChore]))[0].assignment_id);
+
+  console.log(' [11a] what the list contains');
+  const inbB0 = await inbox(B.token);
+  check('B sees the chore A gave them, with a source that still exists', inbB0.notifications.some((n) => n.householdId === h5 && n.sourceType === 'chore_assignment' && n.sourceId === bAsg && n.sourceGone === false && n.isRead === false));
+  check('every row belongs to the caller (checked against the database)', (await sql(`SELECT 1 FROM notification WHERE notification_id = ANY($1::bigint[]) AND user_id <> $2`, [inbB0.notifications.map((n) => n.notificationId), uB])).length === 0);
+  check('unread count matches the unread rows', inbB0.unread === inbB0.notifications.filter((n) => !n.isRead).length);
+  const swapMade = await read(await expectStatus('A asks B to swap (A\'s chore for B\'s)', api(p5('/swap-requests'), { method: 'POST', token: A.token, body: { type: 'swap', requesterAssignmentId: aAsg, targetAssignmentId: bAsg, message: 'Can we trade?' } }), 201));
+  const inbB1 = await inbox(B.token), swapNote = inbB1.notifications.find((n) => n.sourceType === 'chore_swap_request' && n.sourceId === swapMade.swapId);
+  check('B has the swap request: pending, can respond, and it raises the red alert', swapNote?.sourceStatus === 'pending' && swapNote.canRespond === true && swapNote.swapPending === true && inbB1.swapPending >= 1);
+  check('A (the one who asked) gets no red alert from their own request', (await inbox(A.token)).notifications.every((n) => !(n.sourceType === 'chore_swap_request' && n.swapPending)));
+  check('D (not involved) sees nothing about it', (await inbox(D.token)).notifications.every((n) => !(n.sourceType === 'chore_swap_request' && n.sourceId === swapMade.swapId)));
+
+  console.log(' [11b] marking read: only your own');
+  await expectStatus('B marks the swap notification read', api(`/api/notifications/${swapNote.notificationId}`, { method: 'PATCH', token: B.token, body: { isRead: true } }), 200);
+  check('reading it clears the red alert', (await inbox(B.token)).swapPending === inbB1.swapPending - 1);
+  await expectStatus('B accepts the swap', api(p5(`/swap-requests/${swapMade.swapId}`), { method: 'PATCH', token: B.token, body: { action: 'accept' } }), 200);
+  const swapAfter = (await inbox(B.token)).notifications.find((n) => n.notificationId === swapNote.notificationId);
+  check('once decided, the card shows it as accepted and offers no more buttons', swapAfter.sourceStatus === 'accepted' && swapAfter.canRespond === false);
+  const dBefore = await inbox(D.token);
+  await expectStatus('unknown section -> 400', api('/api/notifications/read-all', { method: 'POST', token: B.token, body: { section: 'everything' } }), 400);
+  const dUnreadDb = () => count(`SELECT count(*) n FROM notification WHERE user_id=$1 AND is_read=false`, [uD]);
+  const dUnread0 = await dUnreadDb();
+  const part = await read(await expectStatus('B marks only the chores section read (body also names D)', api('/api/notifications/read-all', { method: 'POST', token: B.token, body: { section: 'chores', userId: uD, user_id: uD } }), 200));
+  check('only chores rows of B changed; D\'s rows were not touched', (await count(`SELECT count(*) n FROM notification WHERE user_id=$1 AND section='chores' AND is_read=false`, [uB])) === 0 && (await dUnreadDb()) === dUnread0 && part.marked >= 0);
+  await read(await expectStatus('B marks everything read', api('/api/notifications/read-all', { method: 'POST', token: B.token, body: {} }), 200));
+  check('B has nothing unread; D still has the same unread count', (await inbox(B.token)).unread === 0 && (await dUnreadDb()) === dUnread0 && (await inbox(D.token)).unread === dBefore.unread);
+  await expectStatus('read-all with no token -> 401', api('/api/notifications/read-all', { method: 'POST', body: {} }), 401);
+
+  console.log(' [11c] money and calendar cards offer the right buttons to the right person');
+  const exp = await read(await api(p5('/expenses'), { method: 'POST', token: A.token, body: { itemName: 'Pizza', totalAmount: '30.00', participantUserIds: [uB, uD] } }));
+  const payRes = await api(p5('/payments'), { method: 'POST', token: B.token, body: { payeeUserId: uA, expenseIds: [exp.expenseId], paidWith: 'venmo' } });
+  const payNote = (await inbox(A.token)).notifications.find((n) => n.sourceType === 'payment');
+  check('A (the payee) can confirm the payment from the card; B (the payer) is not offered it', payRes.status === 201 && payNote?.canRespond === true && (await inbox(B.token)).notifications.every((n) => !(n.sourceType === 'payment' && n.canRespond)));
+  const ev5 = await read(await api(p5('/events'), { method: 'POST', token: A.token, body: { eventName: 'Movie night', date: addD(today, 4), time: '20:00', category: 'hosting', taggedUserIds: [uB] } }));
+  const evNote = (await inbox(B.token)).notifications.find((n) => n.sourceType === 'event' && n.sourceId === ev5.eventId);
+  check('B is asked about the event (card can answer); A, the host, is not offered buttons', evNote?.canRespond === true && evNote.sourceStatus === 'pending' && (await inbox(A.token)).notifications.every((n) => !(n.sourceType === 'event' && n.sourceId === ev5.eventId && n.canRespond)));
+  await api(p5(`/events/${ev5.eventId}`), { method: 'DELETE', token: A.token });
+  check('after A deletes the event its notification is gone', (await inbox(B.token)).notifications.every((n) => !(n.sourceType === 'event' && n.sourceId === ev5.eventId)));
+
+  console.log(' [11d] a household you moved out of disappears from the list');
+  check('before leaving: D has rows from this household', (await inbox(D.token)).notifications.some((n) => n.householdId === h5));
+  await sql('UPDATE household_member SET left_date = now() WHERE household_id=$1 AND user_id=$2', [h5, uD]);
+  const dAfter = await inbox(D.token);
+  check('after leaving: none of that household\'s notifications are shown, and they do not count as unread', dAfter.notifications.every((n) => n.householdId !== h5) && dAfter.unread === dAfter.notifications.filter((n) => !n.isRead).length);
+  check('the rows still exist (history is kept), just hidden', (await count('SELECT count(*) n FROM notification WHERE user_id=$1 AND household_id=$2', [uD, h5])) > 0);
+
 }
 
 let exitCode = 0;

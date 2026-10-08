@@ -16,6 +16,7 @@ import * as swapRespond from './handlers/swap-respond.js';
 import * as cronChores from './handlers/cron-chores.js';
 import * as notifications from './handlers/notifications.js';
 import * as notificationRead from './handlers/notification-read.js';
+import * as notificationsReadAll from './handlers/notifications-read-all.js';
 import * as expenses from './handlers/expenses.js';
 import * as expenseOne from './handlers/expense-one.js';
 import * as balances from './handlers/balances.js';
@@ -64,6 +65,7 @@ add('/households/:id/events/:eventId/respond', eventRespond);
 add('/households/:id/board', board);
 add('/households/:id/board/:messageId', boardOne);
 add('/notifications', notifications);
+add('/notifications/read-all', notificationsReadAll);
 add('/notifications/:id', notificationRead);
 
 // static segments beat :params when two routes could match
