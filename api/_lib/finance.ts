@@ -7,6 +7,7 @@ import { db, schema as s, type Tx } from './db.js';
 import type { CurrentUser } from './auth.js';
 import { HttpError, id } from './http.js';
 import { assertActiveMembers, assertCreator } from './household.js';
+import { activeIds, firstName, householdTz, optStr, str, todayIn } from './validate.js';
 import { fromCents, splitCents, sumCents, toCents } from '../../shared/money.js';
 import { balancesFor, computeBalances, shareStatus, type PaymentRow, type PaymentStatus, type ShareRow } from '../../shared/balances.js';
 
@@ -15,12 +16,6 @@ const APPS = ['venmo', 'zelle', 'apple_cash'] as const;
 const usd = (cents: number) => `$${fromCents(cents)}`;
 
 // ---- validation helpers -----------------------------------------------------------------------
-function str(v: unknown, min: number, max: number, label: string): string {
-  const t = typeof v === 'string' ? v.trim() : '';
-  if (t.length < min || t.length > max) throw new HttpError(400, min ? `${label} is required (up to ${max} characters)` : `${label} must be at most ${max} characters`);
-  return t;
-}
-const optStr = (v: unknown, max: number, label: string) => (v == null || v === '' ? null : str(v, 1, max, label));
 function moneyOf(v: unknown, label: string, { allowZero = false } = {}): number {
   if (typeof v !== 'string') throw new HttpError(400, `${label} must be an amount like "12.34"`);
   let c: number;
@@ -29,7 +24,6 @@ function moneyOf(v: unknown, label: string, { allowZero = false } = {}): number 
   if (c > MAX_CENTS) throw new HttpError(400, `${label} is too large`);
   return c;
 }
-const todayIn = (tz: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date());
 function ymd(v: unknown, tz: string): string {
   if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(`${v}T12:00:00Z`)) || new Date(`${v}T12:00:00Z`).toISOString().slice(0, 10) !== v) throw new HttpError(400, 'Date must look like 2026-10-31');
   const t = new Date(`${todayIn(tz)}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + 1);
@@ -43,15 +37,6 @@ function webUrl(v: unknown): string | null {
   if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new HttpError(400, 'Link must be a web address starting with https://');
   return u.toString();
 }
-async function householdTz(ex: Tx | typeof db, householdId: number) {
-  const [h] = await ex.select({ tz: s.household.timezone }).from(s.household).where(eq(s.household.householdId, householdId));
-  return h?.tz ?? 'America/Denver';
-}
-const firstName = async (ex: Tx | typeof db, userId: number) => (await ex.select({ f: s.users.firstName }).from(s.users).where(eq(s.users.userId, userId)))[0]?.f ?? 'Someone';
-async function activeIds(ex: Tx | typeof db, householdId: number) {
-  return (await ex.select({ u: s.householdMember.userId }).from(s.householdMember).where(and(eq(s.householdMember.householdId, householdId), isNull(s.householdMember.leftDate)))).map((r) => r.u);
-}
-
 // ---- reading ----------------------------------------------------------------------------------
 async function loadLedger(householdId: number) {
   const shares = await db.select({

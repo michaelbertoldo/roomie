@@ -326,6 +326,230 @@ async function main() {
   check('every payment equals the sum of the shares it settles', (await sql(`SELECT 1 FROM payment p LEFT JOIN (SELECT settled_by_payment_id id, sum(amount_owed) s FROM expense_share WHERE settled_by_payment_id IS NOT NULL GROUP BY 1) x ON x.id=p.payment_id WHERE p.household_id=$1 AND p.amount <> coalesce(x.s,0)`, [h2])).length === 0);
   check('no payment settles a buyer\'s own share, and every share settled by a payment is the payer\'s', (await sql(`SELECT 1 FROM expense_share s JOIN expense e USING (expense_id) JOIN payment p ON p.payment_id=s.settled_by_payment_id WHERE e.household_id=$1 AND (s.user_id=e.paid_by_user_id OR p.payer_user_id<>s.user_id OR p.payee_user_id<>e.paid_by_user_id)`, [h2])).length === 0);
   check('no share belongs to someone outside the household', (await sql(`SELECT 1 FROM expense_share s JOIN expense e USING (expense_id) WHERE e.household_id=$1 AND NOT EXISTS (SELECT 1 FROM household_member m WHERE m.household_id=e.household_id AND m.user_id=s.user_id)`, [h2])).length === 0);
+
+  // =====================================================================================================
+  console.log('\n[9] chores: rules, generated occurrences, rotation, reminders, swap and skip');
+  const { generateAll, sendDueReminders } = await import('../api/_lib/chores.js');
+  const { addDays: addD, dayOfWeek: dow } = await import('../shared/chore-dates.js');
+  const H3 = await read(await api('/api/households', { method: 'POST', token: A.token, body: { householdName: 'Chore House', timezone: 'America/Denver' } }));
+  const h3 = H3.householdId as number;
+  for (const t of [B.token, C.token]) await api('/api/households/join', { method: 'POST', token: t, body: { joinCode: H3.joinCode } });
+  const p3 = (path: string) => `/api/households/${h3}${path}`;
+  const post3 = (path: string, token: string, body: unknown) => api(p3(path), { method: 'POST', token, body });
+  const patch3 = (path: string, token: string, body: unknown) => api(p3(path), { method: 'PATCH', token, body });
+  const del3 = (path: string, token: string) => api(p3(path), { method: 'DELETE', token });
+  const list3 = async (token: string) => read(await api(p3('/chores'), { token })) as Promise<{ chores: any[]; assignments: any[]; swapRequests: any[] }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const asg = async (choreId: number) => (await sql('SELECT assignment_id, assigned_user_id, is_completed, completed_at, due_at, last_reminded_at FROM chore_assignment WHERE chore_id=$1 ORDER BY due_at', [choreId]));
+  const notes3 = (q: string, params: unknown[] = []) => count(`SELECT count(*) n FROM notification WHERE household_id=${h3} AND ${q}`, params);
+  const tomorrow = addD(today, 1), inDays = (n: number) => addD(today, n);
+  const mk = async (body: Record<string, unknown>, token = A.token) => { const r = await post3('/chores', token, body); return { status: r.status, body: await read(r) }; };
+
+  console.log(' [9a] adding a chore: validation, and outsiders');
+  const goodOne = { choreName: 'x', repeats: 'none', date: inDays(2), dueTime: '18:00', assignment: { mode: 'person', userId: uB } };
+  const before9 = { c: await count('SELECT count(*) n FROM chore WHERE household_id=$1', [h3]), n: await notes3('true') };
+  for (const [name, body] of [
+    ['no name', { ...goodOne, choreName: ' ' }], ['unknown repeat type', { ...goodOne, repeats: 'daily' }], ['bad time', { ...goodOne, dueTime: '7pm' }], ['missing time', { ...goodOne, dueTime: undefined }],
+    ['one-time without a date', { ...goodOne, date: undefined }], ['impossible date', { ...goodOne, date: '2026-02-31' }], ['one-time in the past', { ...goodOne, date: '2020-01-01' }],
+    ['weekly without a weekday', { ...goodOne, repeats: 'weekly', date: undefined }], ['weekday 9', { ...goodOne, repeats: 'weekly', dayOfWeek: 9 }], ['monthly day 32', { ...goodOne, repeats: 'monthly', dayOfMonth: 32 }],
+    ['bad effort', { ...goodOne, effort: 'brutal' }], ['no assignee', { ...goodOne, assignment: undefined }], ['rotation of one', { ...goodOne, repeats: 'weekly', dayOfWeek: 1, assignment: { mode: 'rotate', userIds: [uA] } }],
+    ['one-time with a rotation', { ...goodOne, assignment: { mode: 'rotate', userIds: [uA, uB] } }], ['assigned to someone outside the household', { ...goodOne, assignment: { mode: 'person', userId: uD } }],
+    ['rotation including an outsider', { ...goodOne, repeats: 'weekly', dayOfWeek: 1, assignment: { mode: 'rotate', userIds: [uA, uD] } }], ['300-char description', { ...goodOne, description: 'x'.repeat(600) }],
+  ] as const) { const r = await mk(body as Record<string, unknown>); check(`${name} -> 400`, r.status === 400, `(got ${r.status}: ${JSON.stringify(r.body).slice(0, 80)})`); }
+  check('none of those created a chore or a notification', (await count('SELECT count(*) n FROM chore WHERE household_id=$1', [h3])) === before9.c && (await notes3('true')) === before9.n);
+  for (const [name, res] of [['GET chores', api(p3('/chores'), { token: D.token })], ['POST chore', api(p3('/chores'), { method: 'POST', token: D.token, body: goodOne })], ['PATCH chore', api(p3('/chores/1'), { method: 'PATCH', token: D.token, body: { choreName: 'x' } })],
+    ['DELETE chore', api(p3('/chores/1'), { method: 'DELETE', token: D.token })], ['complete', api(p3('/assignments/1/complete'), { method: 'POST', token: D.token })], ['remind', api(p3('/assignments/1/remind'), { method: 'POST', token: D.token })],
+    ['swap request', api(p3('/swap-requests'), { method: 'POST', token: D.token, body: { type: 'skip', requesterAssignmentId: 1, message: 'x' } })], ['answer a request', api(p3('/swap-requests/1'), { method: 'PATCH', token: D.token, body: { action: 'accept' } })]] as const)
+    await expectStatus(`outsider D: ${name} -> 404`, res, 404);
+
+  console.log(' [9b] a weekly chore that rotates A -> B -> C');
+  const wd = (dow(today) + 2) % 7;
+  const rot = await mk({ choreName: 'Take out trash', description: 'Bins to the curb', repeats: 'weekly', dayOfWeek: wd, dueTime: '19:00', effort: 'easy', assignment: { mode: 'rotate', userIds: [uA, uB, uC] }, createdByUserId: uB });
+  check('created (201) with the first occurrences generated', rot.status === 201 && rot.body.occurrences === 4, JSON.stringify(rot.body));
+  const rotId = rot.body.choreId as number;
+  check('created_by is the caller, not the id in the body', Number((await sql('SELECT created_by_user_id c FROM chore WHERE chore_id=$1', [rotId]))[0].c) === uA);
+  let rows = await asg(rotId);
+  check('occurrences go in turn: A, B, C, A', rows.map((r) => Number(r.assigned_user_id)).join() === [uA, uB, uC, uA].join(), rows.map((r) => r.assigned_user_id).join());
+  check('rotation order is stored: A=1, B=2, C=3', (await sql('SELECT array_agg(user_id ORDER BY turn_order) a FROM chore_rotation WHERE chore_id=$1', [rotId]))[0].a.map(Number).join() === [uA, uB, uC].join());
+  check('every due time is 19:00 in the HOUSEHOLD timezone (America/Denver)', (await sql(`SELECT bool_and((due_at AT TIME ZONE 'America/Denver')::time = '19:00') ok FROM chore_assignment WHERE chore_id=$1`, [rotId]))[0].ok === true);
+  check('B and C were told about their first turn (chores section), A (the creator) was not', (await notes3(`section='chores' AND source_type='chore_assignment' AND user_id IN ($1,$2)`, [uB, uC])) === 2 && (await notes3(`user_id=$1`, [uA])) === 0);
+  const g1 = await generateAll({ householdId: h3 }), g2 = await generateAll({ householdId: h3 });
+  check('running the generator again creates nothing (safe to re-run)', g1.created === 0 && g2.created === 0 && (await asg(rotId)).length === 4, JSON.stringify([g1, g2]));
+  const nowIso = new Date().toISOString();
+  const g3 = await generateAll({ householdId: h3, asOf: { today: addD(today, 14), nowIso } });
+  rows = await asg(rotId);
+  check('weeks later the generator tops up the next occurrences and the rotation continues (B next, after A)', g3.created >= 2 && rows.length === 4 + g3.created && Number(rows[4].assigned_user_id) === uB, `${g3.created} new; next=${rows[4]?.assigned_user_id}`);
+  check('and still never twice for the same due_at', (await sql(`SELECT 1 FROM chore_assignment WHERE chore_id=$1 GROUP BY due_at HAVING count(*) > 1`, [rotId])).length === 0);
+
+  console.log(' [9c] daylight saving: 6 PM stays 6 PM local when the clocks change');
+  const dst = await mk({ choreName: 'Sunday reset', repeats: 'weekly', dayOfWeek: 0, date: '2026-10-24', dueTime: '18:00', assignment: { mode: 'person', userId: uA } });
+  await generateAll({ householdId: h3, asOf: { today: '2026-10-24', nowIso: '2026-10-24T06:00:00Z' } });
+  const dstRows = await sql(`SELECT to_char(due_at AT TIME ZONE 'UTC','YYYY-MM-DD HH24:MI') utc, to_char(due_at AT TIME ZONE 'America/Denver','YYYY-MM-DD HH24:MI') local FROM chore_assignment WHERE chore_id=$1 AND due_at BETWEEN '2026-10-25' AND '2026-11-03' ORDER BY due_at`, [dst.body.choreId]);
+  check('Oct 25 (still daylight time) is 18:00 local = 00:00 UTC next day', dstRows[0]?.local === '2026-10-25 18:00' && dstRows[0]?.utc === '2026-10-26 00:00', JSON.stringify(dstRows[0]));
+  check('Nov 1 (the day the clocks fall back) is STILL 18:00 local = 01:00 UTC next day', dstRows[1]?.local === '2026-11-01 18:00' && dstRows[1]?.utc === '2026-11-02 01:00', JSON.stringify(dstRows[1]));
+
+  console.log(' [9d] monthly on the 31st');
+  const mon = await mk({ choreName: 'Pay rent reminder', repeats: 'monthly', dayOfMonth: 31, dueTime: '09:00', assignment: { mode: 'person', userId: uB } });
+  await generateAll({ householdId: h3, horizonDays: 200 });
+  const monRows = await sql(`SELECT (due_at AT TIME ZONE 'America/Denver')::date d, (date_trunc('month', due_at AT TIME ZONE 'America/Denver') + interval '1 month - 1 day')::date last FROM chore_assignment WHERE chore_id=$1`, [mon.body.choreId]);
+  check('every occurrence lands on the LAST day of its month (Feb 28, Apr 30, ...)', monRows.length >= 3 && monRows.every((r) => String(r.d) === String(r.last)), JSON.stringify(monRows.slice(0, 3)));
+
+  console.log(' [9e] one-time chore: marking it done');
+  const one = await mk({ choreName: 'Water the plants', repeats: 'none', date: tomorrow, dueTime: '18:00', assignment: { mode: 'person', userId: uB } });
+  const oneId = one.body.choreId as number; const oneAid = Number((await asg(oneId))[0].assignment_id);
+  check('created with exactly one occurrence, assigned to B; B was told', one.status === 201 && (await asg(oneId)).length === 1 && (await notes3(`user_id=$1 AND source_id=$2`, [uB, oneAid])) === 1);
+  await expectStatus('A (not the assignee) cannot mark it done (403)', api(p3(`/assignments/${oneAid}/complete`), { method: 'POST', token: A.token }), 403);
+  await expectStatus('C cannot either (403)', api(p3(`/assignments/${oneAid}/complete`), { method: 'POST', token: C.token }), 403);
+  check('...still not done', (await asg(oneId))[0].is_completed === false);
+  await expectStatus('B marks it done (200)', api(p3(`/assignments/${oneAid}/complete`), { method: 'POST', token: B.token }), 200);
+  const done = (await asg(oneId))[0];
+  check('is_completed and completed_at are set together, with the date it was done', done.is_completed === true && done.completed_at != null);
+  check('the creator (A) is told; B is not told about their own action', (await notes3(`user_id=$1 AND source_id=$2 AND message LIKE '%finished%'`, [uA, oneAid])) === 1 && (await notes3(`user_id=$1 AND message LIKE '%finished%'`, [uB])) === 0);
+  await expectStatus('marking it done twice (400)', api(p3(`/assignments/${oneAid}/complete`), { method: 'POST', token: B.token }), 400);
+  await expectStatus('A cannot undo it (403)', api(p3(`/assignments/${oneAid}/uncomplete`), { method: 'POST', token: A.token }), 403);
+  await expectStatus('B undoes it (200)', api(p3(`/assignments/${oneAid}/uncomplete`), { method: 'POST', token: B.token }), 200);
+  check('...and completed_at is cleared with it', (await asg(oneId))[0].is_completed === false && (await asg(oneId))[0].completed_at === null);
+  await expectStatus('undoing something not done (400)', api(p3(`/assignments/${oneAid}/uncomplete`), { method: 'POST', token: B.token }), 400);
+  const listed = await list3(C.token);
+  const listedOne = listed.chores.find((c) => c.choreId === oneId);
+  check('the chart shows what C needs: schedule text, rotation, canEdit=false for C, canEdit=true for A', listedOne.schedule.startsWith('One time at 6:00 PM') && listedOne.canEdit === false && (await list3(A.token)).chores.find((c) => c.choreId === oneId).canEdit === true);
+  check('assignments carry a status: upcoming here, overdue/done derived from the data', listed.assignments.find((a) => a.assignmentId === oneAid).status === 'upcoming');
+
+  console.log(' [9f] reminders never spam (last_reminded_at)');
+  const remChore = await mk({ choreName: 'Reminder target', repeats: 'none', date: tomorrow, dueTime: '18:00', assignment: { mode: 'person', userId: uB } });
+  const rAid = Number((await asg(remChore.body.choreId))[0].assignment_id);
+  await sql(`UPDATE chore_assignment SET due_at = now() + interval '5 hours' WHERE assignment_id=$1`, [rAid]); // due soon
+  const rem = (q = '') => count(`SELECT count(*) n FROM notification WHERE source_type='chore_assignment' AND source_id=$1 AND section='system' ${q}`, [rAid]);
+  const run1 = await sendDueReminders();
+  check('the job reminds B once for the chore that is due within 24 hours', run1.reminded >= 1 && (await rem()) === 1 && (await asg(remChore.body.choreId))[0].last_reminded_at != null, JSON.stringify(run1));
+  const run2 = await sendDueReminders();
+  check('running it again right away sends NOTHING for that chore', (await rem()) === 1, JSON.stringify(run2));
+  await sql(`UPDATE chore_assignment SET last_reminded_at = now() - interval '21 hours' WHERE assignment_id=$1`, [rAid]);
+  await sendDueReminders();
+  check('about a day later it is allowed to remind once more', (await rem()) === 2);
+  await sql(`UPDATE chore_assignment SET last_reminded_at = NULL, is_completed = true, completed_at = now() WHERE assignment_id=$1`, [rAid]);
+  await sendDueReminders();
+  check('a chore that is already done is never reminded', (await rem()) === 2);
+  await sql(`UPDATE chore_assignment SET is_completed = false, completed_at = NULL, last_reminded_at = now() - interval '2 hours' WHERE assignment_id=$1`, [rAid]);
+  await expectStatus('A nudges B manually, but B was reminded 2 hours ago (429)', api(p3(`/assignments/${rAid}/remind`), { method: 'POST', token: A.token }), 429);
+  await sql(`UPDATE chore_assignment SET last_reminded_at = NULL WHERE assignment_id=$1`, [rAid]);
+  await expectStatus('with no recent reminder, A can nudge B (200)', api(p3(`/assignments/${rAid}/remind`), { method: 'POST', token: A.token }), 200);
+  check('B got a chores-section notification from A', (await notes3(`user_id=$1 AND actor_user_id=$2 AND source_id=$3 AND message LIKE '%reminded you%'`, [uB, uA, rAid])) === 1);
+  await expectStatus('and nudging again straight away is throttled (429)', api(p3(`/assignments/${rAid}/remind`), { method: 'POST', token: C.token }), 429);
+  await expectStatus('B cannot remind themselves (400)', api(p3(`/assignments/${rAid}/remind`), { method: 'POST', token: B.token }), 400);
+
+  console.log(' [9g] swapping and skipping');
+  const X = await mk({ choreName: 'Dishes', repeats: 'none', date: inDays(3), dueTime: '18:00', assignment: { mode: 'person', userId: uA } });
+  const Y = await mk({ choreName: 'Vacuum', repeats: 'none', date: inDays(4), dueTime: '19:00', assignment: { mode: 'person', userId: uB } });
+  const Z = await mk({ choreName: 'Bathroom', repeats: 'none', date: inDays(5), dueTime: '10:00', assignment: { mode: 'person', userId: uA } });
+  const a1 = Number((await asg(X.body.choreId))[0].assignment_id), b1 = Number((await asg(Y.body.choreId))[0].assignment_id), a2 = Number((await asg(Z.body.choreId))[0].assignment_id);
+  const swapBody = { type: 'swap', requesterAssignmentId: a1, targetAssignmentId: b1, message: 'Studying for an exam' };
+  const sw = async (token: string, b: unknown) => api(p3('/swap-requests'), { method: 'POST', token, body: b });
+  for (const [name, token, body, st] of [
+    ['no reason', A.token, { ...swapBody, message: '' }, 400], ['B asking about A\'s chore', B.token, swapBody, 403], ['swapping with your own other chore', A.token, { ...swapBody, targetAssignmentId: a2 }, 400],
+    ['swapping with yourself', A.token, { ...swapBody, targetAssignmentId: a1 }, 400], ['swap without a target', A.token, { ...swapBody, targetAssignmentId: undefined }, 400],
+    ['skip that names a target', A.token, { type: 'skip', requesterAssignmentId: a1, targetAssignmentId: b1, message: 'x' }, 400], ['unknown type', A.token, { ...swapBody, type: 'trade' }, 400],
+    ['a chore that does not exist', A.token, { ...swapBody, requesterAssignmentId: 999999999 }, 404], ['reason over 300 characters', A.token, { ...swapBody, message: 'x'.repeat(301) }, 400],
+  ] as const) await expectStatus(`${name} -> ${st}`, sw(token, body), st);
+  check('none of that created a request', (await count('SELECT count(*) n FROM chore_swap_request s JOIN chore_assignment a ON a.assignment_id=s.requester_assignment_id JOIN chore c USING (chore_id) WHERE c.household_id=$1', [h3])) === 0);
+  const s1b = await read(await sw(A.token, swapBody)); const s1 = s1b.swapId as number;
+  check('A asks B to swap Dishes for Vacuum (201, pending)', s1b.status === 'pending');
+  check('only B is notified (chores section, pointing at the request)', (await notes3(`source_type='chore_swap_request' AND source_id=$1`, [s1])) === 1 && (await notes3(`source_type='chore_swap_request' AND source_id=$1 AND user_id=$2 AND section='chores'`, [s1, uB])) === 1);
+  await expectStatus('a second open request on the same chore is refused (409)', sw(A.token, swapBody), 409);
+  const W = await mk({ choreName: 'Sweep', repeats: 'none', date: inDays(4), dueTime: '08:00', assignment: { mode: 'person', userId: uC } });
+  const wAid = Number((await asg(W.body.choreId))[0].assignment_id);
+  await expectStatus('C cannot pull B\'s chore into a second request while one is open on it (409)', sw(C.token, { type: 'swap', requesterAssignmentId: wAid, targetAssignmentId: b1, message: 'x' }), 409);
+  await expectStatus('B asking A to cover Vacuum is also blocked: it is already in an open request (409)', sw(B.token, { type: 'skip', requesterAssignmentId: b1, message: 'x' }), 409);
+  check('the open request shows in the list for everyone', (await list3(C.token)).swapRequests.some((r) => r.swapId === s1 && r.requesterUserId === uA && r.targetUserId === uB));
+  const respond = (token: string, swapId: number, b: unknown) => api(p3(`/swap-requests/${swapId}`), { method: 'PATCH', token, body: b });
+  await expectStatus('C (not involved) cannot answer (403)', respond(C.token, s1, { action: 'accept' }), 403);
+  await expectStatus('A cannot accept their own request (403)', respond(A.token, s1, { action: 'accept' }), 403);
+  await expectStatus('nonsense action (400)', respond(B.token, s1, { action: 'maybe' }), 400);
+  await expectStatus('B declines with a reply (200)', respond(B.token, s1, { action: 'decline', message: 'I have plans Thursday' }), 200);
+  const d1 = (await sql('SELECT status, response_message, responded_date FROM chore_swap_request WHERE swap_id=$1', [s1]))[0];
+  check('declined: status, reply and responded_date recorded; nothing moved', d1.status === 'declined' && d1.response_message === 'I have plans Thursday' && d1.responded_date != null && Number((await sql('SELECT assigned_user_id u FROM chore_assignment WHERE assignment_id=$1', [a1]))[0].u) === uA);
+  check('A is told, including the reply', (await notes3(`user_id=$1 AND source_id=$2 AND message LIKE '%declined%' AND message LIKE '%plans Thursday%'`, [uA, s1])) === 1);
+  await expectStatus('answering again (409: already handled)', respond(B.token, s1, { action: 'accept' }), 409);
+  check('a decided request leaves the open list', !(await list3(A.token)).swapRequests.some((r) => r.swapId === s1));
+  const s2 = (await read(await sw(A.token, swapBody))).swapId as number;
+  await expectStatus('B accepts (200)', respond(B.token, s2, { action: 'accept', message: 'Sure' }), 200);
+  check('BOTH chores changed hands in one step: Dishes -> B, Vacuum -> A', Number((await sql('SELECT assigned_user_id u FROM chore_assignment WHERE assignment_id=$1', [a1]))[0].u) === uB && Number((await sql('SELECT assigned_user_id u FROM chore_assignment WHERE assignment_id=$1', [b1]))[0].u) === uA);
+  const acc = (await sql('SELECT status, responded_date FROM chore_swap_request WHERE swap_id=$1', [s2]))[0];
+  check('accepted with a responded_date, and A was notified', acc.status === 'accepted' && acc.responded_date != null && (await notes3(`user_id=$1 AND source_id=$2 AND message LIKE '%accepted%'`, [uA, s2])) === 1);
+  const s3 = (await read(await sw(A.token, { type: 'swap', requesterAssignmentId: b1, targetAssignmentId: a1, message: 'Swap back?' }))).swapId as number;
+  await expectStatus('B completes Dishes while a request about it is open (200)', api(p3(`/assignments/${a1}/complete`), { method: 'POST', token: B.token }), 200);
+  check('that open request was closed automatically (declined, "done before anyone answered")', (await sql('SELECT status, response_message FROM chore_swap_request WHERE swap_id=$1', [s3]))[0].status === 'declined');
+  await expectStatus('and it can no longer be accepted (409)', respond(B.token, s3, { action: 'accept' }), 409);
+  const s4 = (await read(await sw(A.token, { type: 'skip', requesterAssignmentId: a2, message: 'Out of town' }))).swapId as number;
+  check('skip: BOTH other roommates are asked', (await notes3(`source_type='chore_swap_request' AND source_id=$1 AND user_id IN ($2,$3)`, [s4, uB, uC])) === 2 && (await notes3(`source_type='chore_swap_request' AND source_id=$1 AND user_id=$2`, [s4, uA])) === 0);
+  await expectStatus('A cannot cover their own skip (403)', respond(A.token, s4, { action: 'accept' }), 403);
+  await expectStatus('B says "not me" (200): the request stays open', respond(B.token, s4, { action: 'decline' }), 200);
+  check('...still pending, and only B\'s own notification was marked read', (await sql('SELECT status FROM chore_swap_request WHERE swap_id=$1', [s4]))[0].status === 'pending' && (await notes3(`source_id=$1 AND user_id=$2 AND is_read`, [s4, uB])) === 1 && (await notes3(`source_id=$1 AND user_id=$2 AND NOT is_read`, [s4, uC])) === 1);
+  await expectStatus('C accepts (200): the first to say yes covers it', respond(C.token, s4, { action: 'accept' }), 200);
+  check('the chore is now C\'s and A was told', Number((await sql('SELECT assigned_user_id u FROM chore_assignment WHERE assignment_id=$1', [a2]))[0].u) === uC && (await notes3(`user_id=$1 AND source_id=$2 AND message LIKE '%cover%'`, [uA, s4])) === 1);
+  await expectStatus('B accepting after C already did (409)', respond(B.token, s4, { action: 'accept' }), 409);
+  const Q = await mk({ choreName: 'Mop', repeats: 'none', date: inDays(6), dueTime: '12:00', assignment: { mode: 'person', userId: uA } });
+  const qAid = Number((await asg(Q.body.choreId))[0].assignment_id);
+  const s5 = (await read(await sw(A.token, { type: 'skip', requesterAssignmentId: qAid, message: 'Race!' }))).swapId as number;
+  await expectStatus('B cannot withdraw A\'s request (403)', respond(B.token, s5, { action: 'withdraw' }), 403);
+  const race = await Promise.all([respond(B.token, s5, { action: 'accept' }), respond(C.token, s5, { action: 'accept' })]);
+  const codes = race.map((r) => r.status).sort();
+  check('B and C accept at the SAME moment: exactly one wins (200) and one is told it is taken (409)', codes.join() === '200,409', codes.join());
+  const winner = Number((await sql('SELECT assigned_user_id u FROM chore_assignment WHERE assignment_id=$1', [qAid]))[0].u);
+  check('...and the chore belongs to exactly one of them', [uB, uC].includes(winner));
+  const Q2 = await mk({ choreName: 'Windows', repeats: 'none', date: inDays(7), dueTime: '12:00', assignment: { mode: 'person', userId: uA } });
+  const q2 = Number((await asg(Q2.body.choreId))[0].assignment_id);
+  const s6 = (await read(await sw(A.token, { type: 'skip', requesterAssignmentId: q2, message: 'Changed my mind soon' }))).swapId as number;
+  await expectStatus('A withdraws their own request (200)', respond(A.token, s6, { action: 'withdraw' }), 200);
+  check('...it is closed and the chore is still A\'s', (await sql('SELECT status, response_message FROM chore_swap_request WHERE swap_id=$1', [s6]))[0].status === 'declined' && Number((await sql('SELECT assigned_user_id u FROM chore_assignment WHERE assignment_id=$1', [q2]))[0].u) === uA);
+
+  console.log(' [9h] only the creator edits or deletes');
+  await expectStatus('B cannot rename A\'s chore (403)', patch3(`/chores/${oneId}`, B.token, { choreName: 'Hacked' }), 403);
+  await expectStatus('B cannot delete it (403)', del3(`/chores/${oneId}`, B.token), 403);
+  check('...unchanged', (await sql('SELECT chore_name n FROM chore WHERE chore_id=$1', [oneId]))[0].n === 'Water the plants');
+  await expectStatus('A renames it (200)', patch3(`/chores/${oneId}`, A.token, { choreName: 'Water the plants (all)', effort: 'hard' }), 200);
+  await expectStatus('a 700-character description is refused (400)', patch3(`/chores/${oneId}`, A.token, { description: 'x'.repeat(700) }), 400);
+  const sCount = await notes3(`source_type IN ('chore_assignment','chore_swap_request')`);
+  await expectStatus('A deletes the Dishes chore (200)', del3(`/chores/${X.body.choreId}`, A.token), 200);
+  check('its occurrences, requests and notifications went with it', (await count('SELECT count(*) n FROM chore_assignment WHERE chore_id=$1', [X.body.choreId])) === 0 && (await count('SELECT count(*) n FROM chore_swap_request WHERE swap_id=ANY($1)', [[s1, s2, s3]])) === 0 && (await notes3(`source_type='chore_swap_request' AND source_id IN ($1,$2,$3)`, [s1, s2, s3])) === 0 && (await notes3(`source_type IN ('chore_assignment','chore_swap_request')`)) < sCount);
+
+  console.log(' [9i] the daily job, and its secret');
+  const cron = (headers: Record<string, string>) => api('/api/cron/chores', { headers });
+  const secret = process.env.CRON_SECRET!;
+  await expectStatus('no secret -> 401', cron({}), 401);
+  await expectStatus('wrong secret -> 401', cron({ authorization: 'Bearer nope' }), 401);
+  await expectStatus('right secret but wrong scheme -> 401', cron({ authorization: secret }), 401);
+  const saved = process.env.CRON_SECRET; delete process.env.CRON_SECRET;
+  await expectStatus('with NO secret configured the endpoint is disabled, not open (503)', cron({ authorization: 'Bearer ' }), 503);
+  process.env.CRON_SECRET = saved;
+  const ok = await cron({ authorization: `Bearer ${secret}` });
+  const okBody = await read(ok);
+  check('the right secret runs the job (200) and reports counts', ok.status === 200 && typeof okBody.created === 'number' && typeof okBody.reminded === 'number', JSON.stringify(okBody));
+  const cronAgain = await read(await cron({ authorization: `Bearer ${secret}` }));
+  check('running it twice in a row creates and reminds nothing new (idempotent)', cronAgain.created === 0 && cronAgain.reminded === 0, JSON.stringify(cronAgain));
+
+  console.log(' [9j] roommates who moved out');
+  await sql('UPDATE household_member SET left_date = now() WHERE household_id=$1 AND user_id=$2', [h3, uC]);
+  for (const [name, b] of [['a new chore assigned to them', { ...goodOne, assignment: { mode: 'person', userId: uC } }], ['a new rotation that includes them', { ...goodOne, repeats: 'weekly', dayOfWeek: 2, date: undefined, assignment: { mode: 'rotate', userIds: [uA, uC] } }]] as const) {
+    const r = await mk(b as Record<string, unknown>); check(`${name} -> 400`, r.status === 400, `(${r.status})`);
+  }
+  const lastBefore = (await asg(rotId)).length;
+  await generateAll({ householdId: h3, asOf: { today: addD(today, 230), nowIso } }); // beyond everything generated so far
+  const afterLeft = (await asg(rotId)).slice(lastBefore);
+  check('the generator keeps going but NEVER hands a new occurrence to someone who moved out', afterLeft.length >= 2 && afterLeft.every((r) => Number(r.assigned_user_id) !== uC), afterLeft.map((r) => r.assigned_user_id).join());
+  check('the rotation just skips them: A and B alternate', afterLeft.every((r) => [uA, uB].includes(Number(r.assigned_user_id))));
+  const skipOpen = (await read(await sw(A.token, { type: 'skip', requesterAssignmentId: qAid === a2 ? a2 : (await asg(Q2.body.choreId))[0].assignment_id, message: 'Cover please' })));
+  check('a new skip request is only sent to people who still live here (B), never to C', skipOpen.swapId != null && (await notes3(`source_type='chore_swap_request' AND source_id=$1 AND user_id=$2`, [skipOpen.swapId, uC])) === 0 && (await notes3(`source_type='chore_swap_request' AND source_id=$1 AND user_id=$2`, [skipOpen.swapId, uB])) === 1);
+  const cNotes = await notes3('user_id=$1', [uC]);
+  await sql(`UPDATE chore_assignment SET due_at = now() + interval '3 hours', last_reminded_at = NULL, is_completed=false, completed_at=NULL WHERE assignment_id=$1`, [a2]); // a2 belongs to C, who moved out
+  await sendDueReminders();
+  check('no reminder goes to someone who moved out', (await notes3('user_id=$1', [uC])) === cNotes);
+  await expectStatus('C (moved out) can no longer use the chore routes (404)', api(p3('/chores'), { token: C.token }), 404);
+
+  console.log(' [9k] database invariants after all of the above');
+  check('no occurrence is assigned to someone who was never a member of the household', (await sql(`SELECT 1 FROM chore_assignment a JOIN chore c USING (chore_id) WHERE c.household_id=$1 AND NOT EXISTS (SELECT 1 FROM household_member m WHERE m.household_id=c.household_id AND m.user_id=a.assigned_user_id)`, [h3])).length === 0);
+  check('is_completed always matches completed_at', (await sql(`SELECT 1 FROM chore_assignment a JOIN chore c USING (chore_id) WHERE c.household_id=$1 AND a.is_completed <> (a.completed_at IS NOT NULL)`, [h3])).length === 0);
+  check('every swap request is either pending with no response date, or decided with one', (await sql(`SELECT 1 FROM chore_swap_request r JOIN chore_assignment a ON a.assignment_id=r.requester_assignment_id JOIN chore c USING (chore_id) WHERE c.household_id=$1 AND ((r.status='pending') <> (r.responded_date IS NULL))`, [h3])).length === 0);
+  check('no two open requests ever touch the same occurrence', (await sql(`WITH o AS (SELECT requester_assignment_id a FROM chore_swap_request WHERE status='pending' UNION ALL SELECT target_assignment_id FROM chore_swap_request WHERE status='pending' AND target_assignment_id IS NOT NULL) SELECT a FROM o GROUP BY a HAVING count(*) > 1`)).length === 0);
 }
 
 let exitCode = 0;

@@ -4,7 +4,19 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/auth/:path*", "destination": "/api/auth-proxy?p=:path*" },
-    { "source": "/api/:path*", "destination": "/api/router?p=:path*" }
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/auth-proxy?p=:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/router?p=:path*"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/chores",
+      "schedule": "0 14 * * *"
+    }
   ]
 }

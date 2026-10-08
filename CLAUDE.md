@@ -61,3 +61,12 @@
 - Pure logic in `shared/balances.ts` (calculated balances, share status) and `shared/money.ts` (cents, exact splits). Server rules in `api/_lib/finance.ts`; handlers in `api/_lib/handlers/`.
 - `paid_by` is always the caller. A payment's amount is computed on the server from the shares it settles, never read from the request. Only the payee can confirm or dispute (sent -> confirmed|disputed, disputed -> confirmed, confirmed is final). A buyer can delete an expense only while no share has a payment on it.
 - Not built yet: editing an expense, custom (unequal) splits, receipt photos, recurring bills/rent. Notification rows are created by every action; the notifications screen is slice (d).
+
+## Chores (slice b, built)
+- Rules vs occurrences: a `chore` row is the rule; `chore_assignment` rows are generated occurrences. A fixed assignee is a rotation of one (`chore_rotation`); one-time chores get their single assignment at creation. Pure scheduling lives in `shared/chore-dates.ts` (weekly, monthly with month-end clamping, next-in-rotation); server rules in `api/_lib/chores.ts`; handlers in `api/_lib/handlers/`.
+- `due_at` is built in Postgres as `(date + time) AT TIME ZONE household.timezone`, so 6 PM stays 6 PM across daylight saving. Generation (`generateForChore`) runs when a chore is created and daily from Vercel Cron (`/api/cron/chores`, `vercel.json`, protected by `CRON_SECRET`; fails closed with 503 if unset). It only creates missing occurrences and only assigns CURRENT roommates, continuing the rotation from the previous assignee.
+- Reminders: the same cron sends one reminder per occurrence due in the next 24h and sets `last_reminded_at`; a roommate's manual nudge shares that throttle (429 within 12h). Nobody who moved out is reminded, assigned, or asked.
+- Swap and skip (`chore_swap_request`): a swap goes to the one roommate who owns the target occurrence. v3 has no recipient column, so a skip goes to every other current roommate and the FIRST to accept takes the chore ("Not me" is recorded nowhere except marking that person's own notification read). Accepting a swap exchanges both assignees in one transaction. Open requests are auto-closed when their chore is marked done. A request can only be withdrawn by the person who asked.
+- Only the assignee marks a chore done or undoes it; only the creator edits or deletes a chore (schedule changes mean delete and re-add). Status (done / overdue / upcoming) is derived, never stored.
+- Production needs `CRON_SECRET` in Vercel Production env (set). Crons never run on previews.
+

@@ -7,11 +7,12 @@ import { authView } from './pages/auth.js';
 import { onboardingView } from './pages/onboarding.js';
 import { settingsView } from './pages/settings.js';
 import { financesView } from './pages/finances.js';
+import { choresView } from './pages/chores.js';
 import { soonView } from './pages/soon.js';
 
 const NAV = [['home', 'home', 'Home'], ['calendar', 'calendar', 'Calendar'], ['finances', 'money', 'Finances'], ['chores', 'check', 'Chores'], ['settings', 'settings', 'Settings']];
 // Real pages register here as each slice lands; everything else shows the "coming next" card.
-export const pages = { settings: settingsView, finances: financesView };
+export const pages = { settings: settingsView, finances: financesView, chores: choresView };
 
 const root = $('#root');
 const route = () => { const r = location.hash.replace(/^#\/?/, '').split('/')[0]; return NAV.some(([k]) => k === r) ? r : 'finances'; };

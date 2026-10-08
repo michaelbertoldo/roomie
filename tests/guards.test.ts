@@ -12,13 +12,13 @@ const files = (dir: string, out: string[] = []): string[] => {
 
 describe('every API route is behind authentication', () => {
   const handlerFiles = files('api/_lib/handlers');
-  it('every exported handler is built with withUser or withHousehold', () => {
+  it('every exported handler is built with withUser, withHousehold or withCron', () => {
     expect(handlerFiles.length).toBeGreaterThan(0);
     for (const f of handlerFiles) {
       const src = readFileSync(f, 'utf8');
       const handlers = [...src.matchAll(/export const (GET|POST|PATCH|PUT|DELETE)\s*=\s*(\w+)\(/g)];
       expect(handlers.length, `${f} exports no handler`).toBeGreaterThan(0);
-      for (const h of handlers) expect(['withUser', 'withHousehold'], `${f}: ${h[1]} must be wrapped`).toContain(h[2]);
+      for (const h of handlers) expect(['withUser', 'withHousehold', 'withCron'], `${f}: ${h[1]} must be wrapped`).toContain(h[2]);
     }
   });
   it('every handler file is registered in the route table (no orphan handlers)', () => {
