@@ -33,7 +33,7 @@ function shell(page, body) {
   return `<div class="shell"><div class="main">
     <header class="top"><div class="brand">${mark()}<div class="grow"><b>Roomie</b><small class="truncate">${esc(h.householdName)}</small></div></div>
       <div class="row" style="gap:10px"><a href="#/notifications" class="iconbtn" aria-label="Notifications">${ico('bell', 19)}</a>
-      <button class="iconbtn" data-action="account" aria-label="Your account">${avatar(S.user)}</button></div></header>
+      <button class="iconbtn acct" data-action="account" aria-label="Your account">${esc(((S.user.firstName || '?')[0]).toUpperCase())}</button></div></header>
     <nav class="pillnav" aria-label="Main">${items}</nav>
     <main class="page" id="page">${body}</main></div>
     <nav class="tabbar" aria-label="Main">${items}</nav></div>`;

@@ -233,6 +233,7 @@ body::before{background:radial-gradient(60% 60% at 80% 0,color-mix(in srgb,var(-
 .chip,.seg,.seg button{border-radius:9px}
 .badge{border-radius:6px}
 .iconbtn{border:1px solid var(--line);box-shadow:none}
+.iconbtn.acct{border:0;padding:0;background:var(--accent);color:#fff;font-weight:650;font-size:15px;line-height:1;font-family:inherit;display:flex;align-items:center;justify-content:center}
 .hero-card{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 7%,var(--card)),var(--card) 65%)}
 .bar i,.mark.lg,.feat{background:var(--accent)}
 .tabbar{border-radius:18px}
