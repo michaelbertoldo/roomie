@@ -44,6 +44,8 @@ async function main() {
   check('GET /api/households (bare path, POST-only) -> our 405 JSON', hh.status === 405 && (await hh.json()).error === 'Method not allowed', `(status ${hh.status})`);
   const deep = await call('/api/households/1/members');
   check('GET /api/households/1/members (3 segments) is routed to our function -> 401 JSON', deep.status === 401 && (await deep.json()).error === 'Sign in required', `(status ${deep.status})`);
+  const cronNo = await call('/api/cron/chores'); const cronBad = await call('/api/cron/chores', { headers: { authorization: 'Bearer not-the-secret' } });
+  check('the cron endpoint is routed but closed to the public (401/503 with our JSON, never 200 or a platform 404)', [401, 503].includes(cronNo.status) && [401, 503].includes(cronBad.status) && /^\{"error":/.test(await cronNo.text()), `(${cronNo.status}/${cronBad.status})`);
   const sess0 = await call('/api/auth/get-session', { headers: { origin: ORIGIN } });
   check('/api/auth/get-session through our domain reaches Neon Auth (no INVALID_HOSTNAME)', sess0.status === 200 && (await sess0.text()).trim() === 'null', `(status ${sess0.status})`);
   for (const path of ['/api/auth/%2e%2e/x', '/api/auth/a%2Fb']) {
