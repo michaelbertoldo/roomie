@@ -9,6 +9,8 @@
   "scripts": {
     "dev:api": "tsx --env-file=.env.local scripts/dev-server.ts",
     "db:pull": "node --env-file=.env.local ./node_modules/drizzle-kit/bin.cjs pull && tsx scripts/sync-schema.ts",
+    "db:counts": "tsx --env-file=.env.local scripts/row-counts.ts",
+    "db:counts:prod": "tsx --env-file=.env.production.local scripts/row-counts.ts",
     "db:seed": "tsx --env-file=.env.local scripts/seed.ts",
     "db:unseed": "tsx --env-file=.env.local scripts/unseed.ts",
     "test": "vitest run",

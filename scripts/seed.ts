@@ -4,10 +4,10 @@
 // It only ever touches rows it owns: the household with join code MAPLE412 and the four users
 // listed in scripts/lib/seed-constants.ts. Those users have no sign-in, so to look around, sign
 // up normally and join the household with the code MAPLE412. `npm run db:unseed` removes it all.
-import { eq, inArray, sql } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import { db, pool, schema as s } from '../api/_lib/db.js';
 import { fromCents, splitCents, toCents } from '../api/_lib/money.js';
-import { SEED_EMAILS, SEED_EMAIL_LIST, SEED_JOIN_CODE } from './lib/seed-constants.js';
+import { SEED_ALL_JOIN_CODES, SEED_EMAILS, SEED_EMAIL_LIST, SEED_EXTRA_JOIN_CODES, SEED_JOIN_CODE } from './lib/seed-constants.js';
 import { assertBranchFor } from './lib/db-guard.js';
 
 const TZ = 'America/Denver';
@@ -27,15 +27,19 @@ async function main() {
   await assertBranchFor(pool, 'the seed', { production: process.argv.includes('--production') });
   await db.transaction(async (tx) => {
     // ---- wipe our own previous seed ----------------------------------------------------------
-    await tx.delete(s.household).where(eq(s.household.joinCode, JOIN_CODE)); // cascades to everything in it
+    await tx.delete(s.household).where(inArray(s.household.joinCode, SEED_ALL_JOIN_CODES)); // cascades to everything in it
+    const old = await tx.select({ id: s.users.userId }).from(s.users).where(inArray(s.users.email, SEED_EMAIL_LIST));
+    if (old.length) await tx.delete(s.appFeedback).where(inArray(s.appFeedback.userId, old.map((u) => u.id))); // feedback only SET NULLs on user delete
     await tx.delete(s.users).where(inArray(s.users.email, SEED_EMAIL_LIST));
 
     // ---- people, household, membership -------------------------------------------------------
-    const [alex, priya, jake, sam] = await tx.insert(s.users).values([
+    const [alex, priya, jake, sam, dana, eli] = await tx.insert(s.users).values([
       { firstName: 'Alex', lastName: 'Rivera', email: SEED_EMAILS.alex, phoneNumber: '(801) 555-0141' },
       { firstName: 'Priya', lastName: 'Shah', email: SEED_EMAILS.priya, phoneNumber: '(801) 555-0188' },
       { firstName: 'Jake', lastName: 'Moreno', email: SEED_EMAILS.jake, phoneNumber: '(801) 555-0102' },
       { firstName: 'Sam', lastName: 'Okafor', email: SEED_EMAILS.sam, phoneNumber: '(801) 555-0177' },
+      { firstName: 'Dana', lastName: 'Whitfield', email: SEED_EMAILS.dana, phoneNumber: '(801) 555-0123' },
+      { firstName: 'Eli', lastName: 'Park', email: SEED_EMAILS.eli, phoneNumber: '(801) 555-0155' },
     ]).returning();
     const [A, P, J, S] = [alex!.userId, priya!.userId, jake!.userId, sam!.userId];
 
@@ -50,6 +54,20 @@ async function main() {
       { householdId: H, userId: J, role: 'member', joinedDate: sql`${daysAgo(55)}` },
       // Sam moved out 3 days ago: history stays, but nothing new is ever assigned to Sam
       { householdId: H, userId: S, role: 'member', joinedDate: sql`${daysAgo(60)}`, leftDate: sql`${daysAgo(3)}` },
+    ]);
+    // two more small households (one owner each) so every table, including household, has 3+ rows
+    const [elm, cedar] = await tx.insert(s.household).values([
+      { householdName: '208 Elm Ave', address: '208 Elm Ave, Orem, UT 84057', joinCode: SEED_EXTRA_JOIN_CODES[0]!, themeColor: '#0d9488', timezone: TZ },
+      { householdName: 'Cedar Hall 3B', address: '300 Cedar Hall Rd, Provo, UT 84606', joinCode: SEED_EXTRA_JOIN_CODES[1]!, themeColor: '#b45309', timezone: TZ },
+    ]).returning();
+    await tx.insert(s.householdMember).values([
+      { householdId: elm!.householdId, userId: dana!.userId, role: 'owner', joinedDate: sql`${daysAgo(30)}` },
+      { householdId: cedar!.householdId, userId: eli!.userId, role: 'owner', joinedDate: sql`${daysAgo(20)}` },
+    ]);
+    await tx.insert(s.appFeedback).values([
+      { userId: A, type: 'idea', rating: 5, message: 'Love the balance view. Could chores have a streak counter?' },
+      { userId: P, type: 'bug', rating: 3, message: 'Marking a chore done on slow wifi took a couple of taps.' },
+      { userId: J, type: 'other', rating: 4, message: 'Easy to set up. The wish list is a nice touch.' },
     ]);
     await tx.insert(s.paymentMethod).values([
       { userId: A, app: 'venmo', username: '@alex-rivera', isPreferred: true },
@@ -91,15 +109,26 @@ async function main() {
       requesterAssignmentId: trashM0.assignmentId, targetAssignmentId: bathSat0.assignmentId, type: 'swap',
       requestMessage: 'Visiting family this weekend. Could we trade?', status: 'pending',
     }).returning();
+    // two more requests: a skip nobody has taken yet, and an older swap that Alex declined
+    const plantsAsg = asg.find((a) => a.choreId === plants!.choreId)!;
+    const trashJ = asg.find((a) => a.choreId === trash!.choreId && a.assignedUserId === J)!;
+    const bathA = asg.find((a) => a.choreId === bath!.choreId && a.assignedUserId === A)!;
+    await tx.insert(s.choreSwapRequest).values([
+      { requesterAssignmentId: plantsAsg.assignmentId, type: 'skip', requestMessage: 'Out of town Thursday, can someone water the plants?', status: 'pending' },
+      { requesterAssignmentId: trashJ.assignmentId, targetAssignmentId: bathA.assignmentId, type: 'swap', requestMessage: 'Can we trade? I have an exam that week.',
+        status: 'declined', responseMessage: 'Sorry, I am slammed that Saturday.', respondedDate: sql`${daysAgo(1)}` },
+    ]);
 
     // ---- calendar ----------------------------------------------------------------------------
-    const [game, meeting] = await tx.insert(s.event).values([
+    const [game, meeting, inspection] = await tx.insert(s.event).values([
       { householdId: H, createdByUserId: J, eventName: 'Game night (hosting)', eventDate: at(addDays(today, 3), '19:00'), endDate: at(addDays(today, 3), '23:00'), location: 'Living room', category: 'hosting', color: '#7c3aed', reminderMinutesBefore: 60, description: 'Jake is hosting about 6 friends.' },
       { householdId: H, createdByUserId: A, eventName: 'House meeting', eventDate: at(nextDow(addDays(today, 1), 0), '18:00'), location: 'Kitchen', category: 'meeting', color: '#0d9488', reminderMinutesBefore: 30, description: 'Chore review and rent.' },
+      { householdId: H, createdByUserId: P, eventName: 'Landlord inspection', eventDate: at(addDays(today, 9), '10:00'), location: 'Whole apartment', category: 'other', color: '#b45309', reminderMinutesBefore: 120, description: 'Quick walkthrough, please keep common areas tidy.' },
     ]).returning();
     await tx.insert(s.eventTag).values([
       { eventId: game!.eventId, userId: A, response: 'accepted', respondedDate: sql`${hoursAgo(2)}` },
       { eventId: game!.eventId, userId: P, response: 'pending' }, // the "is it OK if I host?" question, still unanswered
+      { eventId: inspection!.eventId, userId: J, response: 'accepted', respondedDate: sql`${hoursAgo(8)}` },
     ]);
 
     // ---- money -------------------------------------------------------------------------------
@@ -112,6 +141,7 @@ async function main() {
     const [, internetBill] = await tx.insert(s.recurringBill).values([
       { householdId: H, billName: 'Rent', billType: 'rent', amount: '1800.00', dueDayOfMonth: 1 },
       { householdId: H, billName: 'Internet', billType: 'utility', amount: '80.00', dueDayOfMonth: 15 },
+      { householdId: H, billName: 'Streaming bundle', billType: 'subscription', amount: '15.49', dueDayOfMonth: 20 },
     ]).returning();
 
     // Expense 1: fully paid back. $90.01 across 4 people; leftover cent goes to the FIRST share (the buyer).
@@ -119,6 +149,11 @@ async function main() {
     const [e1, e2] = await tx.insert(s.expense).values([
       { householdId: H, paidByUserId: A, wishlistItemId: paperTowels!.wishlistItemId, itemName: 'Costco run: paper towels, soap', totalAmount: '90.01', purchaseDate: addDays(today, -14) },
       { householdId: H, paidByUserId: P, billId: internetBill!.billId, itemName: 'Internet (this month)', totalAmount: '80.00', purchaseDate: addDays(today, -10) },
+    ]).returning();
+
+    // Expense 3: Jake bought dish soap and sponges, split three ways among the current roommates, nobody has paid yet.
+    const [e3] = await tx.insert(s.expense).values([
+      { householdId: H, paidByUserId: J, itemName: 'Dish soap and sponges', totalAmount: '12.35', purchaseDate: addDays(today, -2) },
     ]).returning();
 
     // Payments first, so shares can point at them. Every payment equals the sum of the shares it settles.
@@ -145,6 +180,8 @@ async function main() {
       { expenseId: e2!.expenseId, userId: A, amountOwed: fromCents(split2[1]!), settledByPaymentId: pAlexToPriya!.paymentId },
       { expenseId: e2!.expenseId, userId: J, amountOwed: fromCents(split2[2]!), settledByPaymentId: pJakeToPriya!.paymentId },
       { expenseId: e2!.expenseId, userId: S, amountOwed: fromCents(split2[3]!) },
+      // e3: buyer's share first (gets the extra cent), the others owe and nothing is settled yet
+      ...splitCents(toCents(e3!.totalAmount), 3).map((c, i) => ({ expenseId: e3!.expenseId, userId: [J, A, P][i]!, amountOwed: fromCents(c) })),
     ]);
 
     // ---- communication board -----------------------------------------------------------------
@@ -172,7 +209,7 @@ async function main() {
 
   const count = async (t: string) => (await pool.query(`SELECT count(*)::int AS n FROM ${t}`)).rows[0].n as number;
   console.log(`seeded household ${JOIN_CODE}:`);
-  for (const t of ['users', 'household_member', 'chore', 'chore_assignment', 'chore_swap_request', 'event', 'event_tag', 'wishlist_item', 'expense', 'expense_share', 'payment', 'bulletin_message', 'notification'])
+  for (const t of ['household', 'users', 'payment_method', 'recurring_bill', 'app_feedback', 'household_member', 'chore', 'chore_assignment', 'chore_swap_request', 'event', 'event_tag', 'wishlist_item', 'expense', 'expense_share', 'payment', 'bulletin_message', 'notification'])
     console.log(`  ${t.padEnd(20)} ${await count(t)}`);
   await pool.end();
 }

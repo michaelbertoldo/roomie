@@ -8,5 +8,10 @@ export const SEED_EMAILS = {
   priya: 'maple.priya@example.com',
   jake: 'maple.jake@example.com',
   sam: 'maple.sam@example.com',
+  dana: 'elm.dana@example.com', // owner of the second seed household
+  eli: 'cedar.eli@example.com', // owner of the third seed household
 } as const;
+// two small extra households so the household table has several rows. Demo = SEED_JOIN_CODE.
+export const SEED_EXTRA_JOIN_CODES = ['ELM208', 'CEDAR3B'];
+export const SEED_ALL_JOIN_CODES = [SEED_JOIN_CODE, ...SEED_EXTRA_JOIN_CODES];
 export const SEED_EMAIL_LIST: string[] = Object.values(SEED_EMAILS);

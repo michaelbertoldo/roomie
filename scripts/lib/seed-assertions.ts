@@ -20,7 +20,7 @@ export async function assertSeedAsFifthMember(call: Call, check: Check, meUserId
   check('sees the household chores', chores.length === 3);
 
   const { expenses } = (await call(`${h}/expenses`)).json as { expenses: { itemName: string; totalAmount: string; shares: { userId: number; amountOwed: string; status: string }[] }[] };
-  check('sees both past purchases', expenses.length === 2 && expenses.some((e) => e.itemName.startsWith('Costco')) && expenses.some((e) => e.itemName.startsWith('Internet')), JSON.stringify(expenses.map((e) => e.itemName)));
+  check('sees the three purchases', expenses.length === 3 && expenses.some((e) => e.itemName.startsWith('Dish soap')) && expenses.some((e) => e.itemName.startsWith('Costco')) && expenses.some((e) => e.itemName.startsWith('Internet')), JSON.stringify(expenses.map((e) => e.itemName)));
   const costco = expenses.find((e) => e.itemName.startsWith('Costco'))!, internet = expenses.find((e) => e.itemName.startsWith('Internet'))!;
   check('Costco ($90.01) is fully paid back: buyer + three shares paid by confirmed payments', costco.totalAmount === '90.01' && costco.shares.filter((s) => s.status === 'paid').length === 3 && costco.shares.filter((s) => s.status === 'buyer').length === 1, JSON.stringify(costco.shares.map((s) => s.status)));
   check('Internet ($80.00) is partly paid back: one paid, one pending (sent), one unpaid, plus the buyer', internet.totalAmount === '80.00' && ['paid', 'pending', 'unpaid', 'buyer'].every((st) => internet.shares.some((s) => s.status === st)), JSON.stringify(internet.shares.map((s) => s.status)));
@@ -30,7 +30,7 @@ export async function assertSeedAsFifthMember(call: Call, check: Check, meUserId
   check('the new member owes nothing and is owed nothing', bal.mine.length === 0, JSON.stringify(bal.mine));
   check('...and has nothing to pay back', bal.payable.length === 0 && bal.incoming.length === 0 && bal.outgoing.length === 0);
   const pairs = (bal.pairs as { debtorUserId: number; creditorUserId: number; amount: string; pendingAmount: string }[]).map((p) => `${p.debtorUserId}>${p.creditorUserId}:${p.amount}:${p.pendingAmount}`).sort();
-  check('the household balances match the seed: Jake owes Priya $20.00 (pending), Sam owes Priya $20.00', pairs.join('|') === [`${id('Jake')}>${id('Priya')}:20.00:20.00`, `${id('Sam')}>${id('Priya')}:20.00:0.00`].sort().join('|'), pairs.join(' | '));
+  check('the household balances match the seed: Jake owes Priya $15.89 net ($20.00 pending, less $4.11 dish soap), Sam owes Priya $20.00, Alex owes Jake $4.12', pairs.join('|') === [`${id('Jake')}>${id('Priya')}:15.89:20.00`, `${id('Sam')}>${id('Priya')}:20.00:0.00`, `${id('Alex')}>${id('Jake')}:4.12:0.00`].sort().join('|'), pairs.join(' | '));
 
   const pay = await call(`${h}/payments`, { method: 'POST', body: { payeeUserId: id('Alex'), expenseIds: [(await call(`${h}/expenses`)).json.expenses[0].expenseId], paidWith: 'venmo' } });
   check('cannot "pay back" an expense they have no share in (400)', pay.status === 400, `(status ${pay.status})`);
