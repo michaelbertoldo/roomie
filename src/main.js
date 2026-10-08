@@ -9,14 +9,15 @@ import { settingsView } from './pages/settings.js';
 import { financesView } from './pages/finances.js';
 import { choresView } from './pages/chores.js';
 import { calendarView } from './pages/calendar.js';
+import { bellHtml, loadAlerts, notificationsView, paintBell } from './pages/notifications.js';
 import { soonView } from './pages/soon.js';
 
 const NAV = [['home', 'home', 'Home'], ['calendar', 'calendar', 'Calendar'], ['finances', 'money', 'Finances'], ['chores', 'check', 'Chores'], ['settings', 'settings', 'Settings']];
 // Real pages register here as each slice lands; everything else shows the "coming next" card.
-export const pages = { settings: settingsView, finances: financesView, chores: choresView, calendar: calendarView };
+export const pages = { settings: settingsView, finances: financesView, chores: choresView, calendar: calendarView, notifications: notificationsView };
 
 const root = $('#root');
-const route = () => { const r = location.hash.replace(/^#\/?/, '').split('/')[0]; return NAV.some(([k]) => k === r) ? r : 'finances'; };
+const route = () => { const r = location.hash.replace(/^#\/?/, '').split('/')[0]; return r === 'notifications' || NAV.some(([k]) => k === r) ? r : 'finances'; };
 const loading = '<div class="loading"><div class="spin" aria-label="Loading"></div></div>';
 
 async function loadMe() {
@@ -33,7 +34,7 @@ function shell(page, body) {
   document.documentElement.style.setProperty('--accent', h.themeColor || '#4338ca');
   return `<div class="shell"><div class="main">
     <header class="top"><div class="brand">${mark()}<div class="grow"><b>Roomie</b><small class="truncate">${esc(h.householdName)}</small></div></div>
-      <div class="row" style="gap:10px"><a href="#/notifications" class="iconbtn" aria-label="Notifications">${ico('bell', 19)}</a>
+      <div class="row" style="gap:10px">${bellHtml()}
       <button class="iconbtn acct" data-action="account" aria-label="Your account">${esc(((S.user.firstName || '?')[0]).toUpperCase())}</button></div></header>
     <nav class="pillnav" aria-label="Main">${items}</nav>
     <main class="page" id="page">${body}</main></div>
@@ -49,12 +50,13 @@ export async function render() {
     if (mine !== seq) return;
     if (!S.households.length) { root.innerHTML = onboardingView(); return; }
     const page = route();
+    if (page !== 'notifications') await loadAlerts().catch(() => {}); // the bell (that page loads its own); a failure must never block the page
     const keep = $('#page') && root.dataset.page === page; // soft refresh keeps the shell
     if (!keep) root.innerHTML = shell(page, loading);
     const body = pages[page] ? await pages[page]() : soonView(page);
     if (mine !== seq) return;
     root.dataset.page = page;
-    if (keep) $('#page').innerHTML = body; else root.innerHTML = shell(page, body);
+    if (keep) { $('#page').innerHTML = body; paintBell(); } else root.innerHTML = shell(page, body);
   } catch (e) {
     if (mine !== seq) return;
     if (e.status === 401) { resetState(); root.innerHTML = authView(); return; }

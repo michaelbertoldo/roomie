@@ -5,7 +5,7 @@
 import { actions, forms, inputs } from '../lib/events.js';
 import { api } from '../auth-client.js';
 import { S, household } from '../lib/state.js';
-import { avatar, closeModal, empty, esc, fullName, ico, mhead, openModal, phead, seg, showError, toast } from '../lib/dom.js';
+import { ago as agoIn, avatar, closeModal, empty, esc, fullName, ico, mhead, openModal, phead, seg, showError, toast } from '../lib/dom.js';
 
 const COLORS = ['#4338ca', '#db2777', '#0d9488', '#d97706', '#7c3aed', '#0284c7', '#475569'];
 const CATS = [['meeting', 'Meeting'], ['hosting', 'Hosting guests'], ['other', 'Other']];
@@ -35,11 +35,8 @@ const dayLabel = (ymd) => {
 };
 const whenFull = (iso) => new Date(iso).toLocaleString('en-US', { timeZone: tz(), weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 function addDays(ymd, n) { const t = new Date(`${ymd}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
-const ago = (iso) => {
-  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
-  if (m < 1) return 'just now'; if (m < 60) return `${m}m ago`; if (m < 1440) return `${Math.round(m / 60)}h ago`; if (m < 10080) return `${Math.round(m / 1440)}d ago`;
-  return new Date(iso).toLocaleDateString('en-US', { timeZone: tz(), month: 'short', day: 'numeric' });
-};
+const ago = (iso) => agoIn(iso, tz());
+const takeHandoff = () => { try { const v = JSON.parse(sessionStorage.getItem('roomie.open') || 'null'); sessionStorage.removeItem('roomie.open'); return v; } catch { return null; } };
 const refresh = () => window.dispatchEvent(new Event('roomie:render'));
 const path = (p) => `/households/${hid()}${p}`;
 
@@ -130,6 +127,8 @@ export async function calendarView() {
   const filters = `<div class="filters">${seg([['list', 'List'], ['month', 'Month']], view, 'cal-view')}
     <select class="input" data-input="cal-show" aria-label="Show"><option value="all">Events and chores</option><option value="events" ${show === 'events' ? 'selected' : ''}>Events only</option><option value="chores" ${show === 'chores' ? 'selected' : ''}>Chores only</option></select>
     ${view === 'list' ? `<select class="input" data-input="cal-sort" aria-label="Sort by"><option value="date">Sort: date</option><option value="color" ${sortBy === 'color' ? 'selected' : ''}>Sort: color</option></select>` : ''}</div>`;
+  const handoff = takeHandoff();
+  if (handoff?.type === 'event') setTimeout(() => actions['event-detail']({ dataset: { id: String(handoff.id) } }), 60);
   return `${head}<div class="split cal">
     <section class="card" id="cal-main"><div class="stack">${filters}<div>${view === 'list' ? listView() : monthView()}</div></div></section>
     <section class="card board" data-board>${boardInner(false)}</section></div>`;

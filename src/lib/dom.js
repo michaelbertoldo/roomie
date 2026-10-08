@@ -31,6 +31,13 @@ export const money = (cents) => (cents < 0 ? '-' : '') + '$' + Number(fromCents(
 export const fmtDate = (iso, tz, opts = { month: 'short', day: 'numeric' }) => new Date(iso).toLocaleDateString('en-US', { ...opts, timeZone: tz });
 export const fmtDay = (ymd, opts = { month: 'short', day: 'numeric' }) => new Date(`${ymd}T12:00:00Z`).toLocaleDateString('en-US', { ...opts, timeZone: 'UTC' });
 
+/** "5m ago", "2h ago", "3d ago", then a date in the household's timezone. */
+export const ago = (iso, tz) => {
+  const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+  if (m < 1) return 'just now'; if (m < 60) return `${m}m ago`; if (m < 1440) return `${Math.round(m / 60)}h ago`; if (m < 10080) return `${Math.round(m / 1440)}d ago`;
+  return new Date(iso).toLocaleDateString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
+};
+
 export function toast(msg) {
   const t = document.createElement('div'); t.className = 'tst'; t.textContent = msg;
   $('#toast').appendChild(t); setTimeout(() => t.remove(), 3200);

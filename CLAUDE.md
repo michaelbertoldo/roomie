@@ -76,3 +76,8 @@
 - Board: a note is a `bulletin_message`; a reply has `parent_message_id` (one level only). Only the sender edits, pins or deletes; deleting a note removes its replies and notifications. A reply notifies the note's author. A note can link one event of the same household.
 - Not built: event reminders (`reminder_minutes_before` is stored, nothing sends it yet), calendar import and export, true push or websocket realtime (polling instead).
 
+## Notifications (slice d, built)
+- Server in `api/_lib/notifications.ts`: `GET /api/notifications` (the caller's latest 100, only from households they currently live in; a household they moved out of is hidden, rows are kept) returns each row with `sourceGone`, `sourceStatus`, `canRespond`, plus `unread` and `swapPending`. `POST /api/notifications/read-all {section?}` and `PATCH /api/notifications/:id` only ever touch the caller's own rows (user id from the token).
+- Page `src/pages/notifications.js`: five sections plus All, per-card "Check it out" (switches household if needed, opens the page; events open their detail), and answers on the card using the existing endpoints: swap Accept/Decline, payment "I got it"/"I did not" (payee only), hosting check Okay/Not okay. The bell in the top bar shows unread, and a red badge while a swap request waits on you (M-08). The bell refreshes every 30s and on each page load.
+- Not built: phone push notifications (S-06), email, per-type mute settings.
+
