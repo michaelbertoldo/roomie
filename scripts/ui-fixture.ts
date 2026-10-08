@@ -1,5 +1,6 @@
 // Throwaway fixture for clicking through the UI by hand. Creates two roomie-test-* accounts with a
 // known password, a household, and one expense where B owes A. Run `npm run test:cleanup` afterwards.
+import pg from 'pg';
 import { handle } from './dev-server.js';
 import { assertDevEnv } from './lib/db-guard.js';
 
@@ -35,4 +36,14 @@ const list = await (await call(base + '/chores', { token: A.jwt })).json();
 const aTrash = list.assignments.find((x: any) => x.assignedUserId === A.id && list.chores.find((c: any) => c.choreId === x.choreId)?.choreName === 'Take out trash'); // eslint-disable-line @typescript-eslint/no-explicit-any
 const bBath = list.assignments.find((x: any) => x.assignedUserId === B.id && list.chores.find((c: any) => c.choreId === x.choreId)?.choreName === 'Clean bathroom'); // eslint-disable-line @typescript-eslint/no-explicit-any
 if (aTrash && bBath) await call(`${base}/swap-requests`, { method: 'POST', token: A.jwt, body: { type: 'swap', requesterAssignmentId: aTrash.assignmentId, targetAssignmentId: bBath.assignmentId, message: 'Visiting family this weekend' } });
-console.log(`fixture ready: sign in as roomie-test-ui-b@example.com (B owes A $12.00); household "UI Fixture House"`);
+// B also does a few things so A has a notification in every section (chores, expense tracker, calendar) ...
+await call(`${base}/wishlist`, { method: 'POST', token: B.jwt, body: { itemName: 'Dish rack', needOrWant: 'need', estimatedPrice: '14.00' } });
+await chore(B.jwt, { choreName: 'Sweep the floor', repeats: 'none', date: ymd(4), dueTime: '17:00', effort: 'easy', assignment: { mode: 'person', userId: A.id } });
+await call(`${base}/events`, { method: 'POST', token: B.jwt, body: { eventName: 'Movie night', date: ymd(5), time: '20:00', category: 'hosting', taggedUserIds: [A.id] } });
+// ... and a system reminder (normally the daily cron sends these), plus "money" comes from B paying A back in the UI
+if (aTrash) {
+  const owner = new pg.Pool({ connectionString: process.env.DATABASE_URL_UNPOOLED, max: 1 });
+  await owner.query(`INSERT INTO notification (user_id, household_id, section, source_type, source_id, message) VALUES ($1, $2, 'system', 'chore_assignment', $3, 'Reminder: Take out trash is due tomorrow at 7:00 PM.')`, [A.id, h.householdId, aTrash.assignmentId]);
+  await owner.end();
+}
+console.log(`fixture ready: sign in as roomie-test-ui-a@example.com or roomie-test-ui-b@example.com (B owes A $21.50); household "UI Fixture House"`);
