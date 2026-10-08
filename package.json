@@ -19,7 +19,11 @@
     "preview": "vite preview",
     "test:preview": "tsx --env-file=.env.local scripts/preview-test.ts",
     "test:cleanup": "tsx --env-file=.env.local scripts/cleanup-tests.ts",
-    "test:seed": "tsx --env-file=.env.local scripts/seed-test.ts"
+    "test:seed": "tsx --env-file=.env.local scripts/seed-test.ts",
+    "db:seed:prod": "tsx --env-file=.env.production.local scripts/seed.ts --production",
+    "db:unseed:prod": "tsx --env-file=.env.production.local scripts/unseed.ts --production",
+    "db:migrate": "tsx --env-file=.env.local scripts/migrate.ts",
+    "db:migrate:prod": "tsx --env-file=.env.production.local scripts/migrate.ts --production"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",

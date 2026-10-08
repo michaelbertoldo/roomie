@@ -8,6 +8,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { db, pool, schema as s } from '../api/_lib/db.js';
 import { fromCents, splitCents, toCents } from '../api/_lib/money.js';
 import { SEED_EMAILS, SEED_EMAIL_LIST, SEED_JOIN_CODE } from './lib/seed-constants.js';
+import { assertBranchFor } from './lib/db-guard.js';
 
 const TZ = 'America/Denver';
 const JOIN_CODE = SEED_JOIN_CODE;
@@ -23,6 +24,7 @@ const daysAgo = (n: number) => sql`now() - make_interval(days => ${n})`;
 const hoursAgo = (n: number) => sql`now() - make_interval(hours => ${n})`;
 
 async function main() {
+  await assertBranchFor(pool, 'the seed', { production: process.argv.includes('--production') });
   await db.transaction(async (tx) => {
     // ---- wipe our own previous seed ----------------------------------------------------------
     await tx.delete(s.household).where(eq(s.household.joinCode, JOIN_CODE)); // cascades to everything in it

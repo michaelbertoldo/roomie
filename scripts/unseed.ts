@@ -5,6 +5,9 @@
 import { eq, inArray } from 'drizzle-orm';
 import { db, pool, schema as s } from '../api/_lib/db.js';
 import { SEED_EMAIL_LIST, SEED_JOIN_CODE } from './lib/seed-constants.js';
+import { assertBranchFor } from './lib/db-guard.js';
+
+await assertBranchFor(pool, 'the unseed', { production: process.argv.includes('--production') });
 
 const result = await db.transaction(async (tx) => {
   const [house] = await tx.select({ id: s.household.householdId }).from(s.household).where(eq(s.household.joinCode, SEED_JOIN_CODE));

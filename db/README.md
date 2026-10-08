@@ -1,34 +1,40 @@
 # Roomie database
 
-Neon project `roomie` (id royal-dawn-21099610), branch `main`, database `neondb`, Postgres 17.
+Neon project `roomie` (id royal-dawn-21099610), Postgres 17, database `neondb`. Two branches:
 
-- `schema.sql` is the source of truth (v3, 18 tables). It was applied once to the empty database.
-- `migrations/` holds every change since, as numbered files that are reviewed before they run.
-  - `0001_drop_prototype_and_lockdown.sql` removed the first RLS prototype and revoked all access for `authenticated` / `anonymous`.
-  - `0002_lock_set_updated_at.sql` closed EXECUTE on the trigger function.
-- `archive/` is the old row-level-security prototype. Kept for reference only. Never run.
-- `../CLAUDE.md` has the Database and Security rules every session follows.
+| Branch | Endpoint | Used by | Env file |
+|---|---|---|---|
+| **dev** (`br-shiny-snow-b4dfvo7y`) | `ep-bitter-paper-b4o50os5` | local development, **every test suite**, **Vercel Preview deploys**, drizzle-kit | `.env.local` |
+| **main** (`br-lingering-meadow-b4mxxgy5`) | `ep-lingering-wave-b4harozg` | **production and the demo only** (Vercel Production env) | `.env.production.local` |
 
-## How the app reaches the data
-Browser -> `/api/*` (Vercel functions) -> Neon over `DATABASE_URL`. Nothing else. The Neon Data API is OFF.
-Sign-in is Neon Auth, reached through our own domain at `/api/auth/*` (a rewrite in `vercel.json`).
+Each branch has its own Neon Auth instance (its own users and its own `NEON_AUTH_URL`). dev was created from main, so it started with a copy of main's data; they have diverged since and are independent.
+
+## Rules
+- Nothing except production touches **main**. `.env.local` points at dev, so `npm run ...` is safe by default.
+- `.env.production.local` is only for deliberate production work (`db:seed:prod`, `db:migrate:prod`). Never source it for tests or local dev.
+- The guard in `scripts/lib/db-guard.ts` enforces this. It asks the connected database for its `neon.endpoint_id` and compares it to `branches.json`. Every test, sweep and fixture refuses to run unless it is on dev and `DATABASE_URL`, `DATABASE_URL_UNPOOLED` and `NEON_AUTH_URL` all point at dev. Seed, unseed and migrate default to dev and need `--production` plus the production env file for main.
+- Vercel: **Preview** env vars point at dev, **Production** env vars point at main.
 
 ## Roles
-- `neondb_owner`: the role in `DATABASE_URL` and `DATABASE_URL_UNPOOLED`. Owns all 18 tables, full access. This is what `/api` uses.
-- `authenticated`, `anonymous`: the Data API roles. Zero privileges on every table. Keep it that way.
+- `neondb_owner` owns all 18 tables and is the role in every `DATABASE_URL` (both branches). `/api` uses it. It bypasses RLS, and there is no RLS.
+- `authenticated` and `anonymous` (the Data API roles) have zero privileges on every table. The Neon Data API is OFF on both branches.
+
+## Files
+- `schema.sql` is the source of truth (v3, 18 tables). `migrations/` holds numbered changes since. `archive/` is the old RLS prototype, never run. `branches.json` holds the branch and endpoint ids (no secrets).
 
 ## Changing the schema
 1. Write the next numbered file in `migrations/` and get it reviewed.
-2. Apply it with `psql "$DATABASE_URL_UNPOOLED" -v ON_ERROR_STOP=1 -1 -f db/migrations/000N_name.sql`.
-3. `npm run db:pull` to refresh `api/_lib/schema.ts` and `relations.ts`, then `npm run typecheck`.
-4. `npm test && npm run test:security`.
-5. Update `schema.sql` so it still describes the whole database.
+2. `npm run db:migrate -- db/migrations/000N_name.sql` (applies to **dev** in one transaction).
+3. `npm run db:pull` (refreshes `api/_lib/schema.ts` and `relations.ts` from dev), then `npm run typecheck`.
+4. `npm test && npm run test:security && npm run test:seed`.
+5. Only after review: `npm run db:migrate:prod -- db/migrations/000N_name.sql` (applies to **main**), then update `schema.sql`.
 
-## Seed data
-`npm run db:seed` loads one demo household (join code `MAPLE412`, 3 current roommates and 1 who moved out). It deletes and recreates only its own rows (users ending `@seed.roomie.test`). Not run against Neon until reviewed.
+## Seed data (join code `MAPLE412`)
+- `npm run db:seed` / `db:unseed` act on dev. `npm run db:seed:prod` / `db:unseed:prod` act on main (the demo). Both are loaded today.
+- Users are `maple.*@example.com`. The seed only ever deletes and recreates its own rows. Real people who joined the seed household keep their account and just lose that membership on a reset.
 
-## Environment
-See `.env.example`. `DATABASE_URL` (pooled) for `/api`, `DATABASE_URL_UNPOOLED` for migrations and `db:pull`, `NEON_AUTH_URL` for token verification. In Vercel set `DATABASE_URL` and `NEON_AUTH_URL` as environment variables.
+## Environment (see `.env.example`)
+`DATABASE_URL` (pooled, for `/api`), `DATABASE_URL_UNPOOLED` (migrations, drizzle-kit, tests), `NEON_AUTH_URL`, `ROOMIE_DB_BRANCH` (`dev` or `main`).
 
 ## Vercel
-`vercel.json` proxies `/api/auth/*` to Neon Auth. After the first deploy, add the production domain (and preview domain pattern) to Neon Auth trusted origins, otherwise sign-in from that domain is rejected.
+- Auth is proxied through our own domain by `api/auth-proxy.ts`. Every origin that serves the app must be a trusted origin of the matching Neon Auth branch. Today: `https://roomie-is401-preview.vercel.app` on both. See `docs/demo-access.md`.

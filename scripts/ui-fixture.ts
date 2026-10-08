@@ -1,6 +1,9 @@
 // Throwaway fixture for clicking through the UI by hand. Creates two roomie-test-* accounts with a
 // known password, a household, and one expense where B owes A. Run `npm run test:cleanup` afterwards.
 import { handle } from './dev-server.js';
+import { assertDevEnv } from './lib/db-guard.js';
+
+assertDevEnv('the UI fixture');
 const ORIGIN = 'http://localhost:5173';
 const PASSWORD = 'RoomieUiFixture!2026';
 const call = (path: string, init: { method?: string; token?: string; body?: unknown; cookie?: string } = {}) =>

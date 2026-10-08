@@ -1,10 +1,12 @@
 // Removes everything test runs create. Only ever touches rows whose email starts with
 // 'roomie-test-'. Used at the start of a run (sweep leftovers from a crash) and in `finally`.
 import pg from 'pg';
+import { assertDevDatabase } from './db-guard.js';
 
 const PREFIX = 'roomie-test-';
 
 export async function sweepTestData(pool: pg.Pool) {
+  await assertDevDatabase(pool, 'the test cleanup');
   const c = await pool.connect();
   try {
     await c.query('BEGIN');
@@ -23,6 +25,7 @@ export async function sweepTestData(pool: pg.Pool) {
 }
 
 export async function countTestData(pool: pg.Pool) {
+  await assertDevDatabase(pool, 'the test cleanup');
   const r = await pool.query(`
     SELECT (SELECT count(*) FROM users WHERE email LIKE $1)::int AS app_users,
            (SELECT count(*) FROM neon_auth."user" WHERE email LIKE $1)::int AS auth_users,

@@ -6,7 +6,14 @@
 - `npm test` unit tests (money math, balances, route guards) | `npm run test:security` live API tests (auth, access, money rules; ~150 checks) | `npm run test:seed` joins the seed household as a 5th member | `npm run test:preview -- <url>` sign-in on a deployed domain | `npm run test:cleanup` removes any leftover `roomie-test-*` rows | `npm run typecheck`
 - `npm run db:pull` refresh Drizzle types from the live database after a migration | `npm run db:seed` / `npm run db:unseed` demo data (join code MAPLE412; users `maple.*@example.com`)
 - Deploy: `vercel deploy --yes` then `vercel alias set <url> roomie-is401-preview.vercel.app` (that exact origin is trusted in Neon Auth). Preview env vars: `DATABASE_URL`, `NEON_AUTH_URL`.
-- Env lives in `.env.local` (git-ignored, see `.env.example`).
+- Env lives in `.env.local` (git-ignored, see `.env.example`). It points at the Neon **dev** branch.
+- Git: `main` is connected to Vercel, so a push to `main` is a **production** deploy (public). Work on feature branches (a push to a branch deploys a protected preview that uses dev). Merge to `main` only when Michael says to.
+
+## Which Neon branch is used where
+- **dev**: local dev, all test suites (`test`, `test:security`, `test:seed`, `test:preview`, `test:cleanup`), the UI fixture, `db:pull`, and **Vercel Preview** deploys. `.env.local`.
+- **main**: production and the demo only (Vercel Production env). `.env.production.local`. Never source it, read from it, or write to it unless Michael explicitly asks for a production action; use `db:migrate:prod` / `db:seed:prod` for those.
+- The test scripts refuse to run against main (`scripts/lib/db-guard.ts`). Do not weaken or bypass that guard.
+- Migrations go to dev first (`npm run db:migrate -- <file>`), pass all suites, get Michael's review, then `db:migrate:prod`. Details in `db/README.md`.
 
 ## Database
 

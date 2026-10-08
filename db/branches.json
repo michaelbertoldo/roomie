@@ -1,0 +1,5 @@
+{
+  "note": "Neon project royal-dawn-21099610. Ids only, no secrets. scripts/lib/db-guard.ts compares the live connection's neon.endpoint_id to this file.",
+  "main": { "branchId": "br-lingering-meadow-b4mxxgy5", "endpointId": "ep-lingering-wave-b4harozg", "use": "production and the demo ONLY" },
+  "dev":  { "branchId": "br-shiny-snow-b4dfvo7y",       "endpointId": "ep-bitter-paper-b4o50os5",   "use": "local development, every test suite, Vercel Preview deploys" }
+}
