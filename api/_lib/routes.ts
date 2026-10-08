@@ -11,6 +11,13 @@ import * as members from './handlers/members.js';
 import * as chores from './handlers/chores.js';
 import * as notifications from './handlers/notifications.js';
 import * as notificationRead from './handlers/notification-read.js';
+import * as expenses from './handlers/expenses.js';
+import * as expenseOne from './handlers/expense-one.js';
+import * as balances from './handlers/balances.js';
+import * as payments from './handlers/payments.js';
+import * as paymentReview from './handlers/payment-review.js';
+import * as wishlist from './handlers/wishlist.js';
+import * as wishlistOne from './handlers/wishlist-one.js';
 
 type Handler = (req: Request) => Promise<Response>;
 type Entry = { method: string; parts: string[]; handler: Handler };
@@ -29,6 +36,13 @@ add('/households', households);
 add('/households/join', join);
 add('/households/:id/members', members);
 add('/households/:id/chores', chores);
+add('/households/:id/expenses', expenses);
+add('/households/:id/expenses/:expenseId', expenseOne);
+add('/households/:id/balances', balances);
+add('/households/:id/payments', payments);
+add('/households/:id/payments/:paymentId', paymentReview);
+add('/households/:id/wishlist', wishlist);
+add('/households/:id/wishlist/:itemId', wishlistOne);
 add('/notifications', notifications);
 add('/notifications/:id', notificationRead);
 

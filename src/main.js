@@ -1,16 +1,17 @@
 import './styles.css';
 import { api, getToken, signOut } from './auth-client.js';
-import { actions, forms } from './lib/events.js';
+import { actions, forms, inputs } from './lib/events.js';
 import { $, ico, mark, avatar, closeModal, esc, fullName, mhead, openModal, showError, toast } from './lib/dom.js';
 import { S, household, resetState } from './lib/state.js';
 import { authView } from './pages/auth.js';
 import { onboardingView } from './pages/onboarding.js';
 import { settingsView } from './pages/settings.js';
+import { financesView } from './pages/finances.js';
 import { soonView } from './pages/soon.js';
 
 const NAV = [['home', 'home', 'Home'], ['calendar', 'calendar', 'Calendar'], ['finances', 'money', 'Finances'], ['chores', 'check', 'Chores'], ['settings', 'settings', 'Settings']];
 // Real pages register here as each slice lands; everything else shows the "coming next" card.
-export const pages = { settings: settingsView };
+export const pages = { settings: settingsView, finances: financesView };
 
 const root = $('#root');
 const route = () => { const r = location.hash.replace(/^#\/?/, '').split('/')[0]; return NAV.some(([k]) => k === r) ? r : 'finances'; };
@@ -77,6 +78,12 @@ document.addEventListener('submit', async (e) => {
   showError(form, '');
   try { await fn(form, e); } catch (err) { showError(form, err.message || 'Something went wrong'); }
   finally { if (btn) btn.disabled = false; }
+});
+
+for (const type of ['input', 'change']) document.addEventListener(type, (e) => {
+  const el = e.target.closest?.('[data-input]');
+  const fn = el && inputs[el.dataset.input];
+  if (fn) try { fn(el, e); } catch (err) { console.error(err); }
 });
 
 actions['close-modal'] = () => closeModal();

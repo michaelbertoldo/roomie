@@ -2,3 +2,4 @@
 // one delegated listener for each. No inline onclick anywhere.
 export const actions = {};
 export const forms = {};
+export const inputs = {};   // data-input="name" on <input>/<select>: runs on every input/change (live previews)

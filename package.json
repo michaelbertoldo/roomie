@@ -18,7 +18,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:preview": "tsx --env-file=.env.local scripts/preview-test.ts",
-    "test:cleanup": "tsx --env-file=.env.local scripts/cleanup-tests.ts"
+    "test:cleanup": "tsx --env-file=.env.local scripts/cleanup-tests.ts",
+    "test:seed": "tsx --env-file=.env.local scripts/seed-test.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",

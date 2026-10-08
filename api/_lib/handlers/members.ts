@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db, schema } from '../db.js';
 import { withHousehold } from '../context.js';
 import { json } from '../http.js';
@@ -12,5 +12,7 @@ export const GET = withHousehold(async ({ householdId }) => {
   }).from(schema.householdMember)
     .innerJoin(schema.users, eq(schema.users.userId, schema.householdMember.userId))
     .where(eq(schema.householdMember.householdId, householdId));
-  return json({ members: rows });
+  const methods = await db.select({ userId: schema.paymentMethod.userId, app: schema.paymentMethod.app, username: schema.paymentMethod.username, isPreferred: schema.paymentMethod.isPreferred })
+    .from(schema.paymentMethod).innerJoin(schema.householdMember, and(eq(schema.householdMember.userId, schema.paymentMethod.userId), eq(schema.householdMember.householdId, householdId)));
+  return json({ members: rows.map((m) => ({ ...m, paymentMethods: methods.filter((x) => x.userId === m.userId).map(({ app, username, isPreferred }) => ({ app, username, isPreferred })) })) });
 });

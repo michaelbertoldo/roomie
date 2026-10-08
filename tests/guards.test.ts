@@ -39,6 +39,14 @@ describe('every API route is behind authentication', () => {
 });
 
 describe('auth cookie handling', () => {
+  it('forwards only Neon Auth cookies upstream, never unrelated ones', async () => {
+    const { neonAuthCookies } = await import('../api/_lib/authProxy.js');
+    const header = 'sb-abc-auth-token=BIGSECRET; __Secure-neon-auth.session_token=tok; _ga=GA1; neon-auth.csrf=x; fake-neon-auth.x=1; __Host-neon-auth.state=s';
+    expect(neonAuthCookies(header)).toBe('__Secure-neon-auth.session_token=tok; neon-auth.csrf=x; __Host-neon-auth.state=s');
+    expect(neonAuthCookies('a=b; c=d')).toBe('');
+    expect(neonAuthCookies('x=1; __Secure-neon-auth.session_token=STALE; __Secure-neon-auth.session_token=FRESH')).toBe('__Secure-neon-auth.session_token=FRESH');
+    expect(neonAuthCookies(null)).toBe('');
+  });
   it('turns Neon\'s third-party cookie into a first-party one', async () => {
     const { firstPartyCookie } = await import('../api/_lib/authProxy.js');
     const c = firstPartyCookie('__Secure-neon-auth.session_token=abc.def; Max-Age=604800; Domain=neon.tech; Path=/; HttpOnly; Secure; SameSite=None; Partitioned');

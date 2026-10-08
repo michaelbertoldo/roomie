@@ -14,6 +14,24 @@ const DROP_RESPONSE = new Set(['content-encoding', 'content-length', 'transfer-e
  * first-party, so tighten it: Lax (sent on same-site requests and top-level navigations such as OAuth
  * returns, never on cross-site subrequests) and no Partitioned. Domain is dropped so it stays host-only.
  */
+/**
+ * Forward ONLY Neon Auth's own cookies upstream. The browser sends every cookie for our host, and
+ * unrelated ones (other apps on localhost, analytics, ...) must never reach the auth service.
+ */
+export function neonAuthCookies(header: string | null): string {
+  if (!header) return '';
+  // A browser can hold two cookies with the same name (for example an old Partitioned one and a new
+  // first-party one) and sends the OLDEST first. Neon would read the stale one, so keep the LAST
+  // (newest) of each name.
+  const byName = new Map<string, string>();
+  for (const part of header.split(';')) {
+    const c = part.trim();
+    const name = c.split('=')[0]!;
+    if (/^(__Secure-|__Host-)?neon-auth\./.test(name)) byName.set(name, c);
+  }
+  return [...byName.values()].join('; ');
+}
+
 export function firstPartyCookie(cookie: string): string {
   return cookie.replace(/;\s*Domain=[^;]*/gi, '').replace(/;\s*Partitioned/gi, '').replace(/;\s*SameSite=None/gi, '; SameSite=Lax');
 }
@@ -33,7 +51,9 @@ export async function proxyAuth(req: Request): Promise<Response> {
   if (!target.pathname.startsWith(new URL(base).pathname)) return Response.json({ error: 'Bad path' }, { status: 400 });
 
   const headers = new Headers();
-  for (const name of FORWARD_REQUEST) { const v = req.headers.get(name); if (v) headers.set(name, v); }
+  for (const name of FORWARD_REQUEST) { const v = req.headers.get(name); if (v && name !== 'cookie') headers.set(name, v); }
+  const cookies = neonAuthCookies(req.headers.get('cookie'));
+  if (cookies) headers.set('cookie', cookies);
   const hasBody = !['GET', 'HEAD'].includes(req.method);
   const upstream = await fetch(target, { method: req.method, headers, body: hasBody ? await req.arrayBuffer() : undefined, redirect: 'manual' });
 

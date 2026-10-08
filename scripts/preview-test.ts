@@ -6,6 +6,7 @@ import { execSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import { sweepTestData } from './lib/test-cleanup.js';
+import { assertSeedAsFifthMember } from './lib/seed-assertions.js';
 
 const BASE = (process.argv[2] ?? '').replace(/\/$/, '');
 if (!BASE.startsWith('https://')) { console.error('usage: npm run test:preview -- https://<preview-url>'); process.exit(2); }
@@ -81,13 +82,12 @@ async function main() {
   check('refresh: a second get-session yields a JWT that works', !!jwt2 && (await call('/api/me', { headers: { authorization: `Bearer ${jwt2}` } })).status === 200);
   check('same person after refresh (no duplicate user)', (await (await call('/api/me', { headers: { authorization: `Bearer ${jwt2}` } })).json()).user?.userId === me.user?.userId);
 
-  console.log('\n[4] the seed household on the real stack');
-  const join = await call('/api/households/join', { method: 'POST', headers: { authorization: `Bearer ${jwt2}` }, body: { joinCode: 'MAPLE412' } });
-  check('join MAPLE412 as the next member', join.status === 200, `(status ${join.status})`);
-  const hid = (await join.json()).householdId;
-  const members = (await (await call(`/api/households/${hid}/members`, { headers: { authorization: `Bearer ${jwt2}` } })).json()).members as { leftDate: string | null }[];
-  check('sees the whole roster: 4 current + 1 moved out', members?.length === 5 && members.filter((m) => !m.leftDate).length === 4, `(${members?.length} members)`);
-  check('sees the household chores', ((await (await call(`/api/households/${hid}/chores`, { headers: { authorization: `Bearer ${jwt2}` } })).json()).chores as unknown[]).length === 3);
+  console.log('\n[4] the seed household on the real stack (as a new 5th member)');
+  await assertSeedAsFifthMember(async (path, init = {}) => {
+    const r = await call(path, { method: init.method, headers: { authorization: `Bearer ${jwt2}` }, body: init.body });
+    const t = await r.text(); let json: unknown = t; try { json = JSON.parse(t); } catch { /* not json */ }
+    return { status: r.status, json };
+  }, check, me.user.userId);
 
   console.log('\n[5] sign-out');
   const out = await call('/api/auth/sign-out', { method: 'POST', headers: { cookie, origin: ORIGIN }, body: {} });

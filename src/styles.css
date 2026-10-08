@@ -307,3 +307,28 @@ select.input{appearance:auto}
 .chk{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;cursor:pointer}
 .chk input{width:18px;height:18px;accent-color:var(--accent)}
 .chk.off{opacity:.55}
+
+/* ---- finances ---- */
+.st{display:inline-block;font-size:11.5px;font-weight:650;border-radius:6px;padding:2px 8px;white-space:nowrap}
+.st.unpaid{background:color-mix(in srgb,var(--warn) 15%,transparent);color:var(--warn)}
+.st.pending{background:color-mix(in srgb,var(--accent) 13%,transparent);color:var(--accent)}
+.st.paid{background:color-mix(in srgb,var(--good) 13%,transparent);color:var(--good)}
+.st.disputed{background:color-mix(in srgb,var(--bad) 13%,transparent);color:var(--bad)}
+.st.buyer{background:var(--line);color:var(--mute)}
+.exp{display:flex;align-items:center;gap:12px;cursor:pointer}
+.exp .amt{font-variant-numeric:tabular-nums;font-weight:650}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.sharechip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--mute)}
+.sharechip .av{width:20px;height:20px;font-size:10px;border-radius:6px}
+.tot{font-size:26px;font-weight:700;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.methods{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.methods label{display:flex;flex-direction:column;gap:2px;align-items:center;padding:10px 6px;border:1px solid var(--line);border-radius:10px;cursor:pointer;font-weight:600;font-size:13.5px;text-align:center}
+.methods input{position:absolute;opacity:0;pointer-events:none}
+.methods label:has(input:checked){border-color:var(--accent);background:var(--soft);color:var(--accent)}
+.methods small{font-weight:450;color:var(--mute);font-size:12px;word-break:break-all}
+.hint{font-size:13px;color:var(--mute)}
+.steps{display:flex;flex-direction:column;gap:8px}
+@media(max-width:767px){.methods{grid-template-columns:1fr}}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn .i{display:inline-block}
+.grid2>:only-child{grid-column:1/-1}
