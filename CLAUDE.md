@@ -70,3 +70,9 @@
 - Only the assignee marks a chore done or undoes it; only the creator edits or deletes a chore (schedule changes mean delete and re-add). Status (done / overdue / upcoming) is derived, never stored.
 - Production needs `CRON_SECRET` in Vercel Production env (set). Crons never run on previews.
 
+## Calendar and board (slice c, built)
+- Rules in `api/_lib/calendar.ts`; handlers `events`, `event-one`, `event-respond`, `board`, `board-one` (registered in `routes.ts`). Page: `src/pages/calendar.js` (list and month views, chores shown from `/chores`, board beside it, polls every 15s while open and nobody is typing).
+- Events: only the creator edits or deletes (`assertCreator`). Start and end are built in Postgres from date + time in `household.timezone`. Tagged roommates must be current (`assertActiveMembers`); the creator is never tagged. A `hosting` event gives each tagged roommate `event_tag.response = 'pending'` and asks "is that okay?"; other categories leave `response` null (informational). Only the tagged person answers (`POST .../events/:id/respond`), always for themselves, and the creator is notified. Editing replaces the tag list and notifies only newly tagged roommates.
+- Board: a note is a `bulletin_message`; a reply has `parent_message_id` (one level only). Only the sender edits, pins or deletes; deleting a note removes its replies and notifications. A reply notifies the note's author. A note can link one event of the same household.
+- Not built: event reminders (`reminder_minutes_before` is stored, nothing sends it yet), calendar import and export, true push or websocket realtime (polling instead).
+
