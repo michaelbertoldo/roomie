@@ -398,3 +398,7 @@ select.input{appearance:auto}
 .ntdot{width:9px;height:9px;border-radius:50%;margin-top:7px;flex:none;background:transparent}
 .nt.unread .ntdot{background:var(--accent)}
 .nt .acts .ghost{background:transparent;box-shadow:none;color:var(--mute)}
+
+/* ---- slice (e): home ---- */
+.ai{background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 12%,var(--card)),var(--card));border:1px solid color-mix(in srgb,var(--accent) 25%,var(--line));border-radius:14px;padding:14px 16px;margin-bottom:16px;font-weight:550}
+.ai::before{content:"\2728  ";}

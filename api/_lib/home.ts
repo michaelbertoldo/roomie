@@ -17,7 +17,7 @@ export const aiEnabled = () => process.env.HOME_AI_ENABLED === '1' && !!process.
 
 type CallModel = (system: string, user: string) => Promise<string | null>;
 export const anthropicCall: CallModel = async (system, user) => {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch(`${process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com'}/v1/messages`, { // the override is for local testing against a mock
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY!, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({ model: process.env.HOME_AI_MODEL || 'claude-haiku-5-5', max_tokens: 120, system, messages: [{ role: 'user', content: user }] }),
