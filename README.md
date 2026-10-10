@@ -1,10 +1,10 @@
 # Roomie
 
 IS 401 Team 4-06. 
-Heidi Barlow
-Michael Bertoldo
-Frankie Capello
-Ashlynne Hawkins
+- Heidi Barlow
+- Michael Bertoldo
+- Frankie Capello
+- Ashlynne Hawkins
 A shared-house app for roommates: chores, costs, calendar and a message board in one place.
 
 ## App Summary
