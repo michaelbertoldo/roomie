@@ -111,7 +111,8 @@ describe("profile save", () => {
   });
 });
 describe("Home views", () => {
-  it("limits the list to one month and keeps month navigation in List view across year boundaries", async () => {
+  it("shows a fixed two-week window in List view, whatever month the navigation is on", async () => {
+    // "Today" is Nov 5 in these tests, so the window is Nov 5 to Nov 18.
     S.hid = 2; S.households = [{ householdId: 2, householdName: 'Another house', timezone: 'America/Denver' }];
     const baseApi = mockedApi.getMockImplementation();
     mockedApi.mockImplementation((path) => path.endsWith('/events') ? Promise.resolve({ events: [
@@ -126,25 +127,25 @@ describe("Home views", () => {
     expect(content.textContent).not.toContain('December plan');
     const next = () => actions['home-month'](content.querySelector('[data-n="1"]'));
     next();
+    // The heading follows the navigation across the year boundary, the list stays the next two weeks.
     expect(content.textContent).toContain('December 2026');
-    expect(content.textContent).toContain('December plan');
-    expect(content.textContent).not.toContain('Dinner');
+    expect(content.textContent).toContain('Dinner');
+    expect(content.textContent).not.toContain('December plan');
     expect(content.textContent).not.toContain('January plan');
-    expect(content.querySelector('.home-month')).toBeNull();
     next();
     expect(content.textContent).toContain('January 2027');
-    expect(content.textContent).toContain('January plan');
-    expect(content.textContent).not.toContain('December plan');
+    expect(content.textContent).not.toContain('January plan');
     const picker = document.querySelector('[data-input="home-view"]');
     picker.value = 'calendar'; inputs['home-view'](picker);
     expect(content.textContent).toContain('January 2027');
-    expect(content.querySelector('.home-month')).not.toBeNull();
+    const days = [...content.querySelectorAll('.home-month [data-day]')].map((el) => el.dataset.day);
+    expect(days).toHaveLength(14);
+    expect(days[0]).toBe('2026-11-05');
+    expect(days[13]).toBe('2026-11-18');
     picker.value = 'list'; inputs['home-view'](picker);
-    next();
-    expect(content.textContent).toContain('February 2027');
-    expect(content.textContent).toContain('No events or chores from today onward in this month.');
     actions['home-month'](content.querySelector('[data-n="-1"]'));
-    expect(content.textContent).toContain('January plan');
+    expect(content.textContent).toContain('December 2026');
+    expect(content.textContent).toContain('Dinner');
     expect(mockedApi).toHaveBeenCalledTimes(5);
   });
 
@@ -598,7 +599,7 @@ describe('Home live dragging', () => {
 
 
 describe('Home upcoming list dates', () => {
-  it('hides previous household-local days in compact, expanded and View all, while calendar history stays accessible', async () => {
+  it('hides previous household-local days in compact, expanded, View all and the two-week calendar', async () => {
     S.hid = 51; S.households = [{ ...S.households[0], householdId: 51 }];
     // UTC has crossed midnight; Denver is still on November 5.
     vi.setSystemTime(new Date('2026-11-06T03:00:00Z'));
@@ -629,7 +630,10 @@ describe('Home upcoming list dates', () => {
     content = document.getElementById('home-schedule-content');
     expect(content.querySelectorAll('.home-schedule-row')).toHaveLength(8);
     const view = content.querySelector('[data-input="home-view"]'); view.value = 'calendar'; inputs['home-view'](view);
-    expect(content.querySelector('[data-day="2026-11-04"]').textContent).toContain('Yesterday meeting');
+    // The calendar is the same fixed two-week window starting today (Denver Nov 5), so yesterday has no cell.
+    expect(content.querySelector('[data-day="2026-11-04"]')).toBeNull();
+    expect(content.querySelector('[data-day="2026-11-05"]')).not.toBeNull();
+    expect(content.textContent).not.toContain('Yesterday meeting');
   });
 });
 
