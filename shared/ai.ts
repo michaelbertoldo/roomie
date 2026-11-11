@@ -15,3 +15,12 @@ export function cleanAiText(value: unknown): string | null {
   if (!out) return null;
   return out.length > 280 ? `${out.slice(0, 277).trimEnd()}...` : out;
 }
+
+/** Hard cap for the weekly recap: at most `sentences` sentences and `words` words, whatever the model returned. */
+export function capSentences(value: unknown, sentences = 2, words = 45): string | null {
+  const flat = String(value ?? '').slice(0, 1000).replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim();
+  if (!flat) return null;
+  const parts = flat.match(/[^.!?]+(?:[.!?]+|$)/g) ?? [flat];
+  const out = parts.slice(0, sentences).join('').trim().split(' ').slice(0, words).join(' ').replace(/[,;:\s-]+$/, '');
+  return /[.!?]$/.test(out) ? out : `${out}.`;
+}

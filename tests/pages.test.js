@@ -111,6 +111,36 @@ describe("profile save", () => {
   });
 });
 describe("Home views", () => {
+  it("weekly recap: hidden until enabled, cached for the day, Refresh fetches a new one", async () => {
+    let calls = 0, reply = { enabled: true, text: 'You did two chores. Priya needs an answer.' };
+    const baseApi = mockedApi.getMockImplementation();
+    mockedApi.mockImplementation((path) => path.endsWith('/weekly-recap') ? (calls++, Promise.resolve(reply)) : baseApi(path));
+    document.getElementById('page').innerHTML = await homeView();
+    const box = () => document.getElementById('home-recap');
+    expect(box().hidden).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(calls).toBe(1);
+    expect(box().hidden).toBe(false);
+    expect(box().querySelector('.recap-text').textContent).toBe('You did two chores. Priya needs an answer.');
+    // Same day: a new visit uses the cache and shows the card immediately, no new request.
+    document.getElementById('page').innerHTML = await homeView();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(calls).toBe(1);
+    expect(box().hidden).toBe(false);
+    reply = { enabled: true, text: 'Fresh recap. Take out the trash.' };
+    actions['home-recap-refresh']();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(calls).toBe(2);
+    expect(box().querySelector('.recap-text').textContent).toBe('Fresh recap. Take out the trash.');
+    expect(box().querySelector('button').disabled).toBe(false);
+  });
+  it("weekly recap: stays hidden when AI is off", async () => {
+    const baseApi = mockedApi.getMockImplementation();
+    mockedApi.mockImplementation((path) => path.endsWith('/weekly-recap') ? Promise.resolve({ enabled: false }) : baseApi(path));
+    document.getElementById('page').innerHTML = await homeView();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(document.getElementById('home-recap').hidden).toBe(true);
+  });
   it("shows a fixed two-week window with a range label and no month arrows", async () => {
     // "Today" is Thu Nov 5 in these tests, so the window is Nov 5 to Nov 18.
     S.hid = 2; S.households = [{ householdId: 2, householdName: 'Another house', timezone: 'America/Denver' }];

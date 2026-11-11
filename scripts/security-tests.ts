@@ -852,6 +852,21 @@ async function main() {
     const before12 = modelCalls.length;
     await expectStatus('B (moved out) -> 404 and nothing is sent', sum(B.token), 404);
     check('no model call was made for them', modelCalls.length === before12);
+
+    console.log(' [12d] weekly recap: its own flag, scoped to the caller, hard-capped at two sentences');
+    const recap = (token: string) => api(p6('/weekly-recap'), { token });
+    await expectStatus('recap: no token -> 401', api(p6('/weekly-recap')), 401);
+    await expectStatus('recap: outsider C -> 404', recap(C.token), 404);
+    const beforeRecap = modelCalls.length;
+    delete process.env.RECAP_AI_ENABLED;
+    check('recap off by default even with a key and HOME_AI_ENABLED on', (await read(await recap(A.token))).enabled === false && modelCalls.length === beforeRecap);
+    process.env.RECAP_AI_ENABLED = '1';
+    modelReply = { ok: true, text: 'You finished two chores this week. Game night went well. Priya is waiting on you. Say yes soon.' };
+    const rc = await read(await recap(A.token));
+    check('recap returns at most two sentences', rc.enabled === true && typeof rc.text === 'string' && (rc.text.match(/[.!?](\s|$)/g) ?? []).length <= 2, JSON.stringify(rc));
+    const rsent = JSON.stringify(modelCalls[modelCalls.length - 1]!.body);
+    check('recap prompt carries the viewer\'s last week and nothing from the other household', rsent.includes('lastWeek') && !rsent.includes('SECRET-OTHER-HOUSE-EVENT'));
+    delete process.env.RECAP_AI_ENABLED;
   } finally {
     globalThis.fetch = realFetch;
     if (env12.flag === undefined) delete process.env.HOME_AI_ENABLED; else process.env.HOME_AI_ENABLED = env12.flag;

@@ -93,6 +93,30 @@ function compactUpcoming() {
   return `<div class="home-compact-upcoming"><h3>Coming up</h3>${upcoming.slice(0, 3).map((item) => `<div><span class="hint">${esc(dayLabel(item.ymd))}</span>${row(item)}</div>`).join('') || '<p class="hint">Nothing else coming up in the next two weeks.</p>'}</div>`;
 }
 
+// Weekly recap: one cached AI recap per user, household and household-local day. Refresh bypasses the cache (server limits 6/hour).
+const recapKey = () => `roomie.home.recap.${S.user.userId}.${hid()}`;
+const recapCache = () => { try { const c = JSON.parse(localStorage.getItem(recapKey())); return c?.day === ymdIn(Date.now()) && typeof c.text === 'string' ? c.text : null; } catch { return null; } };
+const recapBody = (text, note = '') => text ? `<p class="recap-text">${esc(text)}</p>` : `<p class="hint">${esc(note || 'Your recap is on its way.')}</p>`;
+async function loadRecap(force = false, tries = 0) {
+  const box = document.getElementById('home-recap');
+  if (!box) { if (tries < 20) setTimeout(() => loadRecap(force, tries + 1), 50); return; }
+  const id = hid(), body = box.querySelector('.recap-body'), btn = box.querySelector('[data-action="home-recap-refresh"]');
+  if (!force) { const cached = recapCache(); if (cached) { body.innerHTML = recapBody(cached); return; } }
+  btn.disabled = true; box.setAttribute('aria-busy', 'true');
+  try {
+    const r = await api(`/households/${id}/weekly-recap`);
+    if (hid() !== id || !box.isConnected) return;
+    if (!r.enabled) { box.hidden = true; return; }
+    box.hidden = false;
+    if (r.text) {
+      try { localStorage.setItem(recapKey(), JSON.stringify({ day: ymdIn(Date.now()), text: r.text })); } catch { /* Shown for this visit only. */ }
+      body.innerHTML = recapBody(r.text);
+    } else body.innerHTML = recapBody(recapCache(), r.limited ? 'You have refreshed a lot. Try again in a bit.' : 'No recap right now. Try Refresh in a moment.');
+  } catch { body.innerHTML = recapBody(recapCache(), 'Could not load your recap. Try Refresh.'); }
+  finally { btn.disabled = false; box.removeAttribute('aria-busy'); }
+}
+actions['home-recap-refresh'] = () => loadRecap(true);
+
 export async function homeView() {
   const [{ members }, { events }, chores, balances, { notes }] = await Promise.all([
     api(`/households/${hid()}/members`), api(`/households/${hid()}/events`), api(`/households/${hid()}/chores`), api(`/households/${hid()}/balances`), api(`/households/${hid()}/board`),
@@ -102,6 +126,7 @@ export async function homeView() {
   if (editingKey !== layoutKey()) { editing = false; editingKey = layoutKey(); }
   layout = getLayout();
   const view = getView();
+  if (!recapCache()) setTimeout(() => loadRecap(), 0);
   const owed = balances.mine.reduce((sum, b) => sum + Math.max(0, -toCents(b.signedAmount)), 0);
   const owingMe = balances.mine.reduce((sum, b) => sum + Math.max(0, toCents(b.signedAmount)), 0);
   const widgets = {
@@ -110,6 +135,7 @@ export async function homeView() {
     finances: `<section class="card home-finances"><div><h2>Finances</h2><p class="hint">Your shared expense overview</p></div><div class="home-balance"><span>You owe <b>${money(owed)}</b></span><span>Owed to you <b>${money(owingMe)}</b></span></div><a class="btn s" href="#/finances">Open finances</a></section>`,
   };
   return `${phead('Shared household schedule', 'Here you can see an overview of what’s happening in your household', `<button class="btn s" data-action="home-edit-layout">${editing ? 'Done' : 'Edit dashboard'}</button>`)}
+    <section class="card stack home-recap" id="home-recap" aria-label="Your weekly recap"${recapCache() ? '' : ' hidden'}><div class="row"><h2>Your week</h2></div><div class="recap-body" aria-live="polite">${recapBody(recapCache())}</div><div><button type="button" class="btn s" data-action="home-recap-refresh">Refresh recap</button></div></section>
     <div class="home-layout-status sr-only" role="status"></div><div class="page-content home-dashboard">${layout.map(({ id, size }) => `<div class="home-widget ${size}" data-widget="${id}" data-column="${layout.find((w) => w.id === id).column ?? ''}" data-editing="${editing}">${widgets[id]}</div>`).join('')}</div>`;
 
 }

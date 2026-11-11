@@ -9,8 +9,8 @@ import { listChores } from './chores.js';
 import { getBalances } from './finance.js';
 import { listNotifications } from './notifications.js';
 import { householdTz } from './validate.js';
-import { cleanAiText } from '../../shared/ai.js';
-import { buildAiPrompt, type HomeSnapshot } from '../../shared/home-ai.js';
+import { capSentences, cleanAiText } from '../../shared/ai.js';
+import { buildAiPrompt, buildRecapPrompt, type HomeSnapshot } from '../../shared/home-ai.js';
 import { addDays } from '../../shared/chore-dates.js';
 
 export async function homeSnapshot(householdId: number, viewerId: number): Promise<HomeSnapshot> {
@@ -18,7 +18,7 @@ export async function homeSnapshot(householdId: number, viewerId: number): Promi
   const nowD = new Date();
   const dayOf = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date(iso));
   const when = (iso: string) => new Date(iso).toLocaleString('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  const today = dayOf(nowD.toISOString()), last = addDays(today, 6);
+  const today = dayOf(nowD.toISOString()), last = addDays(today, 6), weekAgo = addDays(today, -7);
 
   const members = await db.select({ userId: s.householdMember.userId, firstName: s.users.firstName }).from(s.householdMember)
     .innerJoin(s.users, eq(s.users.userId, s.householdMember.userId)).where(and(eq(s.householdMember.householdId, householdId), isNull(s.householdMember.leftDate)));
@@ -41,6 +41,11 @@ export async function homeSnapshot(householdId: number, viewerId: number): Promi
       owedToMe: bal.mine.filter((m) => Number(m.signedAmount) > 0).map((m) => ({ who: name(m.otherUserId), amount: `$${Number(m.signedAmount).toFixed(2)}` })),
     },
     waitingOnMe: { swapRequests: here.filter((n) => n.sourceType === 'chore_swap_request').length, hostingChecks: here.filter((n) => n.sourceType === 'event' && n.sourceStatus === 'pending').length, payments: here.filter((n) => n.sourceType === 'payment').length },
+    lastWeek: {
+      choresDone: chores.assignments.filter((a) => a.assignedUserId === viewerId && a.isCompleted && a.completedAt && dayOf(a.completedAt) >= weekAgo).length,
+      choresMissed: chores.assignments.filter((a) => a.assignedUserId === viewerId && !a.isCompleted && dayOf(a.dueAt) >= weekAgo && dayOf(a.dueAt) < today).length,
+      events: events.filter((e) => dayOf(e.eventDate) >= weekAgo && dayOf(e.eventDate) < today).slice(0, 5).map((e) => e.eventName),
+    },
     board: notes.slice(0, 3).map((n) => `${name(n.senderUserId ?? 0)}: ${n.messageText}`),
   };
 }
@@ -56,4 +61,17 @@ export async function homeSummary(user: CurrentUser, householdId: number) {
   if (result.status === 'disabled') return { enabled: false as const };
   if (result.status === 'limited') return { enabled: true as const, text: null, limited: true };
   return { enabled: true as const, text: result.status === 'ok' ? cleanAiText(result.value) : null };
+}
+
+/** Personal two-sentence weekly recap for the caller. Same limits and failure behavior as homeSummary, hard-capped to 2 sentences. */
+export async function weeklyRecap(user: CurrentUser, householdId: number) {
+  const result = await callText({
+    feature: 'recap',
+    userId: user.userId,
+    householdId,
+    prompt: async () => buildRecapPrompt(await homeSnapshot(householdId, user.userId)),
+  });
+  if (result.status === 'disabled') return { enabled: false as const };
+  if (result.status === 'limited') return { enabled: true as const, text: null, limited: true };
+  return { enabled: true as const, text: result.status === 'ok' ? capSentences(result.value) : null };
 }

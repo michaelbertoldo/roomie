@@ -1,7 +1,7 @@
 import { and, count, eq, gte, sql } from 'drizzle-orm';
 import { db, schema as s } from './db.js';
 
-export type AiFeature = 'home' | 'onboarding' | 'eventEmail';
+export type AiFeature = 'home' | 'recap' | 'onboarding' | 'eventEmail';
 
 type Prompt = { system: string; user: string };
 type PromptSource = Prompt | (() => Prompt | Promise<Prompt>);
@@ -22,6 +22,7 @@ export type AiCallResult<T> = {
 
 const featureConfig: Record<AiFeature, { flag: string; model: string; hourlyLimit: number; maxTokens: number }> = {
   home: { flag: 'HOME_AI_ENABLED', model: 'HOME_AI_MODEL', hourlyLimit: 6, maxTokens: 120 },
+  recap: { flag: 'RECAP_AI_ENABLED', model: 'RECAP_AI_MODEL', hourlyLimit: 6, maxTokens: 120 },
   onboarding: { flag: 'ONBOARDING_AI_ENABLED', model: 'ONBOARDING_AI_MODEL', hourlyLimit: 3, maxTokens: 1_400 },
   eventEmail: { flag: 'EVENT_EMAIL_AI_ENABLED', model: 'EVENT_EMAIL_AI_MODEL', hourlyLimit: 6, maxTokens: 240 },
 };

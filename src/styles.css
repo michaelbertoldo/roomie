@@ -738,3 +738,5 @@ button.home-drag-handle:focus-visible{outline:2px solid var(--accent);outline-of
 .chore-attention-board .chore-board-preview{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:0}
 .chore-attention-board .btn{align-self:flex-start}
 .chore-dashboard-layout{margin-bottom:18px}
+
+.home-recap{margin-bottom:18px}.home-recap[hidden]{display:none}.recap-text{font-size:16px;line-height:1.5;margin:0}.home-recap[aria-busy=true] .recap-body{opacity:.6}
