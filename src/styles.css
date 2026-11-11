@@ -572,6 +572,7 @@ select.input{appearance:none;-webkit-appearance:none;padding-right:32px;backgrou
 .home-schedule-row.completed b{text-decoration:line-through;color:var(--mute)}
 .home-empty{padding:30px 0;color:var(--mute)}
 .home-month .day2{min-height:150px;padding:8px;gap:5px}
+.home-month .day2.blank{visibility:hidden;min-height:0;padding:0;border:0}
 .home-calendar-item{display:flex;flex-direction:column;border-left:3px solid var(--ev);padding:3px 5px;background:var(--soft);border-radius:4px;font-size:12px;min-width:0}
 .home-calendar-item span{font-size:10px;color:var(--mute)}
 .home-calendar-item b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

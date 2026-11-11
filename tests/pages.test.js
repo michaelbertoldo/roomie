@@ -111,8 +111,8 @@ describe("profile save", () => {
   });
 });
 describe("Home views", () => {
-  it("shows a fixed two-week window in List view, whatever month the navigation is on", async () => {
-    // "Today" is Nov 5 in these tests, so the window is Nov 5 to Nov 18.
+  it("shows a fixed two-week window with a range label and no month arrows", async () => {
+    // "Today" is Thu Nov 5 in these tests, so the window is Nov 5 to Nov 18.
     S.hid = 2; S.households = [{ householdId: 2, householdName: 'Another house', timezone: 'America/Denver' }];
     const baseApi = mockedApi.getMockImplementation();
     mockedApi.mockImplementation((path) => path.endsWith('/events') ? Promise.resolve({ events: [
@@ -122,31 +122,46 @@ describe("Home views", () => {
     ] }) : baseApi(path));
     document.getElementById('page').innerHTML = await homeView();
     const content = document.getElementById('home-schedule-content');
-    expect(content.textContent).toContain('November 2026');
+    expect(content.querySelector('h2').textContent).toBe('Nov 5 \u2013 Nov 18');
+    expect(content.querySelector('[data-n]')).toBeNull();
     expect(content.textContent).toContain('Dinner');
     expect(content.textContent).not.toContain('December plan');
-    const next = () => actions['home-month'](content.querySelector('[data-n="1"]'));
-    next();
-    // The heading follows the navigation across the year boundary, the list stays the next two weeks.
-    expect(content.textContent).toContain('December 2026');
-    expect(content.textContent).toContain('Dinner');
-    expect(content.textContent).not.toContain('December plan');
-    expect(content.textContent).not.toContain('January plan');
-    next();
-    expect(content.textContent).toContain('January 2027');
     expect(content.textContent).not.toContain('January plan');
     const picker = document.querySelector('[data-input="home-view"]');
     picker.value = 'calendar'; inputs['home-view'](picker);
-    expect(content.textContent).toContain('January 2027');
-    const days = [...content.querySelectorAll('.home-month [data-day]')].map((el) => el.dataset.day);
+    expect(content.querySelector('h2').textContent).toBe('Nov 5 \u2013 Nov 18');
+    expect(content.querySelector('[data-n]')).toBeNull();
+    const grid = [...content.querySelectorAll('.home-month > *')];
+    // Nov 5 is a Thursday: four blank cells put it under "Thu".
+    expect(grid.slice(0, 4).every((el) => el.classList.contains('blank'))).toBe(true);
+    expect(grid[4].dataset.day).toBe('2026-11-05');
+    expect(grid[4].classList.contains('today')).toBe(true);
+    const days = [...content.querySelectorAll('.home-month [data-day]')];
     expect(days).toHaveLength(14);
-    expect(days[0]).toBe('2026-11-05');
-    expect(days[13]).toBe('2026-11-18');
+    expect(days[13].dataset.day).toBe('2026-11-18');
+    // Every day in the window is in range: none is greyed out for being in another month.
+    expect(days.some((el) => el.classList.contains('out'))).toBe(false);
     picker.value = 'list'; inputs['home-view'](picker);
-    actions['home-month'](content.querySelector('[data-n="-1"]'));
-    expect(content.textContent).toContain('December 2026');
     expect(content.textContent).toContain('Dinner');
     expect(mockedApi).toHaveBeenCalledTimes(5);
+  });
+
+  it("uses the same two-week window for the compact Coming up box, not the calendar month", async () => {
+    S.hid = 52; S.households = [{ ...S.households[0], householdId: 52 }];
+    const baseApi = mockedApi.getMockImplementation();
+    mockedApi.mockImplementation((path) => path.endsWith('/events') ? Promise.resolve({ events: [
+      ...events,
+      { ...events[0], eventId: 41, eventName: 'Soon plan', eventDate: '2026-11-12T20:00:00Z' },
+      { ...events[0], eventId: 42, eventName: 'Later in November', eventDate: '2026-11-25T20:00:00Z' },
+    ] }) : baseApi(path));
+    localStorage.setItem('roomie.home.layout.1.52', JSON.stringify([{ id: 'schedule', size: 'compact' }, { id: 'board', size: 'compact' }, { id: 'finances', size: 'compact' }]));
+    document.getElementById('page').innerHTML = await homeView();
+    const content = document.getElementById('home-schedule-content');
+    const view = content.querySelector('[data-input="home-view"]'); view.value = 'calendar'; inputs['home-view'](view);
+    const upcoming = content.querySelector('.home-compact-upcoming');
+    expect(upcoming.textContent).toContain('Soon plan');
+    expect(upcoming.textContent).not.toContain('Later in November');
+    localStorage.removeItem('roomie.home.layout.1.52');
   });
 
   it("switches the same household-wide items between list and calendar, with pending approval visible", async () => {
@@ -482,8 +497,8 @@ describe('Home widget customization', () => {
     await render();
     expect(document.querySelector('.home-widget').classList.contains('compact')).toBe(true);
     expect(document.querySelector('[data-input="home-view"]').value).toBe('calendar');
-    actions['home-month'](document.querySelector('[data-n="1"]'));
-    expect(document.querySelector('#home-schedule-content').textContent).toContain('December 2026');
+    expect(document.querySelector('#home-schedule-content [data-n]')).toBeNull();
+    expect(document.querySelector('#home-schedule-content h2').textContent).toBe('Nov 5 \u2013 Nov 18');
     S.user = { ...S.user, userId: 2 };
     await render();
     expect(document.querySelector('.home-widget').classList.contains('expanded')).toBe(true);
