@@ -160,6 +160,9 @@ async function main() {
     const beforeDelete = Number((await sql('SELECT count(*) n FROM notification_channel_confirmation WHERE user_id=$1', [meA.user.userId]))[0].n);
     await sql('DELETE FROM notification_channel WHERE user_id=$1 AND channel=\'email\'', [meA.user.userId]);
     check('confirmation/rate-limit history survives deleting the channel', Number((await sql('SELECT count(*) n FROM notification_channel_confirmation WHERE user_id=$1', [meA.user.userId]))[0].n) === beforeDelete);
+    // Delete + re-add must not reset the send limit (3 per user and per address per hour). A has sent 2 so far.
+    await expectStatus('re-adding the same address after delete still sends while under the limit', api('/api/notification-channel', { method: 'POST', token: A.token, body: { destination: `channel-a-${run}@example.com` } }), 201);
+    await expectStatus('re-adding again after delete is rate limited (history was not reset)', api('/api/notification-channel', { method: 'POST', token: A.token, body: { destination: `channel-a-${run}@example.com` } }), 429);
   } finally {
     globalThis.fetch = channelFetch;
     for (const [key, value] of Object.entries(channelEnv)) { const envName = key === 'key' ? 'BREVO_API_KEY' : key === 'from' ? 'EMAIL_FROM' : key === 'origin' ? 'APP_ORIGIN' : key === 'base' ? 'BREVO_BASE_URL' : 'NOTIFICATION_HASH_SECRET'; if (value === undefined) delete process.env[envName]; else process.env[envName] = value; }
