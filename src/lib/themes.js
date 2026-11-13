@@ -14,14 +14,38 @@ function blend(base, color, amount) {
   const a = channels(base), b = channels(color);
   return '#' + a.map((v, i) => Math.round(v * (1 - amount) + b[i] * amount).toString(16).padStart(2, '0')).join('');
 }
-function themeColors(base, palette, order) {
+// Retro and Coastal need curated surface balance rather than the shared recipe.
+function curatedSurfaces(id, isDark, palette) {
+  if (id === 'coastal') return isDark ? {
+    bg: blend('#111115', palette[4], .70), card: blend('#222226', palette[4], .82),
+    raised: blend('#303034', palette[5], .48), alternate: blend('#303034', palette[6], .32),
+    tile: blend('#303034', palette[5], .65),
+  } : {
+    bg: blend('#ffffff', palette[6], .11), card: blend('#ffffff', palette[1], .08),
+    raised: blend('#ffffff', palette[6], .19), alternate: blend('#ffffff', palette[0], .10),
+    tile: blend('#ffffff', palette[1], .20),
+  };
+  if (id === 'retro') return isDark ? {
+    bg: blend('#111115', palette[4], .25), card: blend('#222226', palette[4], .32),
+    raised: blend('#303034', palette[4], .40), alternate: blend('#303034', palette[5], .18),
+    tile: blend('#303034', palette[4], .58),
+  } : {
+    bg: blend('#ffffff', palette[0], .11), card: blend('#ffffff', palette[0], .045),
+    raised: blend('#ffffff', palette[1], .10), alternate: blend('#ffffff', palette[0], .18),
+    tile: blend('#ffffff', palette[0], .26),
+  };
+  return null;
+}
+function themeColors(base, palette, order, id) {
   const [accent, nav, highlight, detail, secondary, decoration, outline] = order.map(i => palette[i]);
   const isDark = base === dark;
-  const bg = isDark ? blend('#111115', outline, .42) : blend('#ffffff', decoration, .16);
-  const card = isDark ? blend('#222226', nav, .38) : blend('#ffffff', nav, .09);
-  const raised = isDark ? blend('#303034', secondary, .30) : blend('#ffffff', secondary, .19);
-  const alternate = isDark ? blend('#303034', accent, .19) : blend('#ffffff', accent, .15);
-  const tile = isDark ? blend('#303034', highlight, .18) : blend('#ffffff', highlight, .25);
+  let bg = isDark ? blend('#111115', outline, .42) : blend('#ffffff', decoration, .16);
+  let card = isDark ? blend('#222226', nav, .38) : blend('#ffffff', nav, .09);
+  let raised = isDark ? blend('#303034', secondary, .30) : blend('#ffffff', secondary, .19);
+  let alternate = isDark ? blend('#303034', accent, .19) : blend('#ffffff', accent, .15);
+  let tile = isDark ? blend('#303034', highlight, .18) : blend('#ffffff', highlight, .25);
+  const curated = curatedSurfaces(id, isDark, palette);
+  if (curated) ({ bg, card, raised, alternate, tile } = curated);
   const surfaces = [bg, card, raised, alternate, tile];
   const ink = isDark ? '#ffffff' : '#202124';
   let mute = isDark ? '#d4d0d8' : '#55505b';
@@ -37,7 +61,7 @@ function themeColors(base, palette, order) {
 
 }
 export const themes = Object.fromEntries(Object.entries(definitions).map(([id, [name, description, palette, order]]) => [id, {
-  name, description, palette, light: themeColors(light, palette, order), dark: themeColors(dark, palette, order),
+  name, description, palette, light: themeColors(light, palette, order, id), dark: themeColors(dark, palette, order, id),
 }]));
 
 export function onColor(hex) {

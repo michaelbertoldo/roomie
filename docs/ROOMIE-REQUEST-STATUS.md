@@ -3,6 +3,8 @@
 Use this checklist instead of repeatedly reconstructing the full chat. Distinguish implemented code, published PRs, merged code, and live verification. Do not call local drafts shipped.
 
 ## Latest decisions
+- Announcements use one consistent background; never alternate colors by row position.
+- Keep Berry and Orchid surfaces as approved. Retro: cream/deep-blue surfaces with bright colors in smaller accents. Coastal: ivory/sea-glass and charcoal-blue surfaces, with olive used sparingly.
 - Selected palettes set the overall vibe. Use all seven palette colors in interface roles (actions, navigation, hover highlights, focus, markers and decorative details), not one hue everywhere. No fixed Coastal category colors. Category meaning/design is paused.
 - Keep all five exact palette strips, personal preferences and light/dark modes. Use layered palette-colored backgrounds, cards, nested posts and balance tiles in all themes/modes. Use opaque fills and crisp contrasting text; no translucent overlay or blur.
 - Page titles are visually hidden; navigation labels remain. Home overview sentence has no exclamation mark.
