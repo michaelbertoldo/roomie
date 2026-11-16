@@ -1,8 +1,9 @@
-# Roomie request status — November 13, 2026
+# Roomie request status — November 14, 2026
 
 Use this checklist instead of repeatedly reconstructing the full chat. Distinguish implemented code, published PRs, merged code, and live verification. Do not call local drafts shipped.
 
 ## Latest decisions
+- Latest layout requirement supersedes content-height masonry: every authenticated page forms one aligned rectangle on desktop. Each panel fits its grid slot and scrolls internally. On narrow screens, panels stack with bounded scrolling heights.
 - Announcements use one consistent background; never alternate colors by row position.
 - Keep Berry and Orchid surfaces as approved. Retro: cream/deep-blue surfaces with bright colors in smaller accents. Coastal: ivory/sea-glass and charcoal-blue surfaces, with olive used sparingly.
 - Selected palettes set the overall vibe. Use all seven palette colors in interface roles (actions, navigation, hover highlights, focus, markers and decorative details), not one hue everywhere. No fixed Coastal category colors. Category meaning/design is paused.
@@ -25,7 +26,7 @@ Use this checklist instead of repeatedly reconstructing the full chat. Distingui
 - Remove leftover descriptive Profile/email introductory copy.
 - Exclude departed members' wishlist items from the Log expense picker.
 - Exclude departed actors and unavailable sources from personal Activity responses.
-- Measure dashboard tile heights so side cards nest without forced blank rows; resize when contents/window change. Allow drops in blank dashboard space to target the nearest tile slot.
+- Superseded by the November 14 rectangle requirement: stop measuring panel content to grow dashboard slots. Allow drops in blank dashboard space to target the nearest tile slot.
 - Dashboard still snaps to responsive slots using three width presets; arbitrary pixel placement is not supported.
 
 ## Verification still outstanding

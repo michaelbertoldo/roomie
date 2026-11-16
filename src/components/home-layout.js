@@ -1,4 +1,4 @@
-// Presets choose widths; measured content heights let shorter tiles nest without blank rows.
+// Presets choose slots inside a fixed rectangular frame. Long content scrolls inside each card.
 export const HOME_PRESETS = ['focus-left', 'equal', 'focus-right'];
 export function normalizeHomeLayout(widgets, preset = 'focus-left') {
   const ids = widgets.map((widget) => typeof widget === 'string' ? widget : widget.id);
@@ -8,9 +8,7 @@ export function fitHomeWidgets(target = document.querySelector('.home-dashboard'
   if (!target?.isConnected) return;
   for (const [index, widget] of [...target.children].entries()) {
     widget.style.removeProperty('grid-column');
-    const height = widget.querySelector(':scope > .card')?.getBoundingClientRect().height ?? 0;
-    if (window.innerWidth > 900 && height > 0) widget.style.gridRowEnd = `span ${Math.ceil((height + 18) / 8)}`;
-    else widget.style.removeProperty('grid-row-end');
+    widget.style.removeProperty('grid-row-end');
     widget.dataset.slot = ['primary', 'secondary', 'tertiary'][index];
     const heading = widget.querySelector('h2');
     if (!heading) continue;
@@ -24,20 +22,4 @@ export function fitHomeWidgets(target = document.querySelector('.home-dashboard'
     }
   }
 }
-let resizeObserver, contentObserver, frame;
-export function connectHomeLayout() {
-  resizeObserver?.disconnect(); contentObserver?.disconnect(); cancelAnimationFrame(frame);
-  const target = document.querySelector('.home-dashboard');
-  if (!target) return;
-  const fit = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => fitHomeWidgets(target)); };
-  const observeCards = () => {
-    resizeObserver?.disconnect();
-    for (const card of target.querySelectorAll('.home-widget > .card')) resizeObserver?.observe(card);
-    fit();
-  };
-  if (typeof ResizeObserver !== 'undefined') resizeObserver = new ResizeObserver(fit);
-  contentObserver = new MutationObserver(observeCards);
-  contentObserver.observe(target, { childList: true, subtree: true });
-  observeCards(); fitHomeWidgets(target);
-}
-window.addEventListener('resize', () => fitHomeWidgets());
+export const connectHomeLayout = () => fitHomeWidgets();

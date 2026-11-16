@@ -21,15 +21,13 @@ it('clears old measured spans and enables heading movement only while editing', 
   widgets[0].dataset.editing='false';connectHomeLayout();
   expect(document.querySelector('[data-widget-drag]')).toBeNull();
 });
-it('sizes nested rows to card content and updates when a card grows', () => {
-  document.body.innerHTML = '<div class="home-dashboard" data-preset="focus-left"><div class="home-widget"><section class="card"><h2>Schedule</h2></section></div><div class="home-widget"><section class="card"><h2>Board</h2></section></div></div>';
-  const widgets = [...document.querySelectorAll('.home-widget')];
-  let boardHeight = 200;
-  widgets[0].querySelector('.card').getBoundingClientRect = () => ({height: 800});
-  widgets[1].querySelector('.card').getBoundingClientRect = () => ({height: boardHeight});
+it('keeps content growth from changing the fixed dashboard slots', () => {
+  document.body.innerHTML = '<div class="home-dashboard" data-preset="focus-left"><div class="home-widget" style="grid-row-end:span 103"><section class="card"><h2>Schedule</h2></section></div></div>';
+  const widget = document.querySelector('.home-widget');
+  widget.querySelector('.card').getBoundingClientRect = () => ({height: 800});
   connectHomeLayout();
-  expect(widgets[0].style.gridRowEnd).toBe('span 103');
-  expect(widgets[1].style.gridRowEnd).toBe('span 28');
-  boardHeight = 360; connectHomeLayout();
-  expect(widgets[1].style.gridRowEnd).toBe('span 48');
+  expect(widget.style.gridRowEnd).toBe('');
+  widget.querySelector('.card').innerHTML += '<p>More content</p>'.repeat(200);
+  connectHomeLayout();
+  expect(widget.style.gridRowEnd).toBe('');
 });

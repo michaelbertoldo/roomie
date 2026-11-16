@@ -1,3 +1,4 @@
+import { connectPageLayout } from './components/page-layout.js';
 import { applyAppearance } from './lib/appearance.js';
 import './styles.css';
 import { api, getToken, signOut } from './auth-client.js';
@@ -77,6 +78,7 @@ export async function render() {
     root.dataset.page = page; root.dataset.hid = String(S.hid);
     if (keep) { $('#page').innerHTML = body; paintBell(); } else root.innerHTML = shell(page, body);
     connectHomeLayout();
+    connectPageLayout(page);
     openPendingCalendarCreate(page);
     openPendingActivity(page);
     if (legacyActivity) await openActivityPanel();
