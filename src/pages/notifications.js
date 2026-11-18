@@ -7,7 +7,15 @@ import { ago, closeModal, esc, ico, mhead, openModal, toast } from '../lib/dom.j
 import { prepareFinanceActivity } from './finances.js';
 
 const TARGET = { chore_assignment: 'chores', chore_swap_request: 'chores', expense: 'finances', expense_share: 'finances', payment: 'finances', wishlist_item: 'finances', event: 'calendar', bulletin_message: 'calendar' };
-const LABEL = { chores: 'Chores', money: 'Payments', expense_tracker: 'Expenses', system: 'Reminder', calendar_board: 'Events & board' };
+const GROUPS = [
+  { id: 'chores', label: 'Chores' },
+  { id: 'money', label: 'Money' },
+  { id: 'events', label: 'Events & Hosting' },
+  { id: 'board', label: 'Board' },
+  { id: 'other', label: 'Other' },
+];
+const LABEL = { chores: 'Chores', money: 'Payments', expense_tracker: 'Expenses', system: 'Reminder', calendar_board: 'Events & Hosting / Board' };
+let statusFilter = 'unread';
 let D = { notifications: [], unread: 0, swapPending: 0 };
 let viewer = null, loadSequence = 0, pendingTarget = null;
 let alertPoll = null, alertPollGeneration = 0, alertPollViewer = null;
@@ -74,10 +82,26 @@ function activityRow(n) {
   return available ? `<button type="button" class="activity-item ${n.isRead ? '' : 'unread'}" data-action="activity-open" data-id="${n.notificationId}">${content}</button>`
     : `<div class="activity-item ${n.isRead ? '' : 'unread'}">${content}</div>`;
 }
+function activityGroup(n) {
+  if (n.sourceType === 'chore_assignment' || n.sourceType === 'chore_swap_request' || n.section === 'chores') return 'chores';
+  if (['expense', 'expense_share', 'payment', 'wishlist_item'].includes(n.sourceType) || ['money', 'expense_tracker'].includes(n.section)) return 'money';
+  if (n.sourceType === 'event') return 'events';
+  if (n.sourceType === 'bulletin_message') return 'board';
+  return 'other';
+}
 function panelContent() {
-  const unread = D.notifications.filter((n) => !n.isRead);
-  return `${mhead('Activity')}<div class="row sp activity-heading"><p class="hint">Updates for you</p>${D.unread ? '<button class="activity-read-all" data-action="activity-read-all">Mark all read</button>' : ''}</div>
-    <div id="activity-error" class="err" role="alert"></div><div class="activity-list">${unread.length ? [...unread].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).map(activityRow).join('') : '<p class="activity-empty">No unread updates.</p>'}</div>`;
+  const notifications = D.notifications.filter((n) => statusFilter === 'all' || (statusFilter === 'unread' ? !n.isRead : n.isRead));
+  const sorted = [...notifications].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const groups = GROUPS.map((group) => {
+    const items = sorted.filter((n) => activityGroup(n) === group.id);
+    return items.length ? `<section class="activity-group" aria-labelledby="activity-group-${group.id}"><h4 id="activity-group-${group.id}" class="activity-group-title">${group.label}<span>${items.length}</span></h4>${items.map(activityRow).join('')}</section>` : '';
+  }).join('');
+  const filter = (id, label) => `<button type="button" class="activity-filter ${statusFilter === id ? 'selected' : ''}" data-action="activity-filter" data-id="${id}" aria-pressed="${statusFilter === id}">${label}</button>`;
+  const readAll = statusFilter !== 'read' && D.unread ? '<button class="activity-read-all" data-action="activity-read-all">Mark all read</button>' : '';
+  const empty = statusFilter === 'read' ? 'No read updates.' : statusFilter === 'all' ? 'No updates yet.' : 'No unread updates.';
+  return `${mhead('Activity')}<div class="row sp activity-heading"><p class="hint">Updates for you</p>${readAll}</div>
+    <div class="activity-filters" role="group" aria-label="Filter updates by read status">${filter('all', 'All')}${filter('unread', 'Unread')}${filter('read', 'Read')}</div>
+    <div id="activity-error" class="err" role="alert"></div><div class="activity-list">${groups || `<p class="activity-empty">${empty}</p>`}</div>`;
 }
 function paintPanel({ preserveFocus = false } = {}) {
   const sheet = document.getElementById('activity-panel');
@@ -107,6 +131,11 @@ export async function openActivityPanel() {
 }
 actions['activity-toggle'] = () => { if (isOpen()) { closeModal(); paintBell(); } else return openActivityPanel(); };
 actions['activity-retry'] = openActivityPanel;
+actions['activity-filter'] = (button) => {
+  if (!['all', 'unread', 'read'].includes(button.dataset.id)) return;
+  statusFilter = button.dataset.id;
+  paintPanel({ preserveFocus: true });
+};
 actions['activity-read-all'] = async (button) => {
   button.disabled = true;
   try {
