@@ -16,6 +16,7 @@ import { bellHtml, loadAlerts, openActivityPanel, openPendingActivity, paintBell
 import { homeView } from './pages/home.js';
 import { openPendingCalendarCreate } from './lib/calendar-create.js';
 import { connectHomeLayout } from './components/home-layout.js';
+import { connectScreenLayout } from './components/screen-layout.js';
 import { soonView } from './pages/soon.js';
 import { householdSwitcherHtml } from './components/household-switcher.js';
 
@@ -83,6 +84,7 @@ export async function render() {
     root.dataset.page = page; root.dataset.hid = String(S.hid);
     if (keep) { $('#page').innerHTML = body; paintBell(); } else root.innerHTML = shell(page, body);
     connectHomeLayout();
+    connectScreenLayout(page);
     openPendingCalendarCreate(page);
     openPendingActivity(page);
     if (legacyActivity) await openActivityPanel();

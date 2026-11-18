@@ -1011,7 +1011,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 
 /* Desktop panels keep their outlines as content changes. */
 @media(min-width:901px){
-  .home-dashboard[data-preset],.split.cal{height:900px;grid-template-rows:minmax(0,1fr);min-height:0}
+  .home-dashboard[data-preset],.split.cal{height:var(--dashboard-height,calc(100dvh - 300px));grid-template-rows:minmax(0,1fr);min-height:0}
   .home-dashboard[data-preset="focus-left"],.home-dashboard[data-preset="focus-right"]{grid-template-rows:repeat(2,minmax(0,1fr))}
   .home-dashboard[data-preset]>.home-widget{min-height:0}
   .home-dashboard[data-preset]>.home-widget>.card,.split.cal>#cal-main,.chore-schedule-column>#chore-schedule{min-height:0;overflow:auto}
